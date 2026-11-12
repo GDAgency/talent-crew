@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Talent &amp; Crew</title>
+<meta name="description" content="Where your models and technicians are, the hours they've worked, what they're owed and the receipts to reimburse.">
+<meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#17181C" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Talent &amp; Crew">
+<link rel="stylesheet" href="/fonts/fonts.css">
+<link rel="stylesheet" href="/styles.css">
+<script src="/app.js" defer></script>
+</head>
+<body>
+
+<!-- ============ Sign in / first-run setup ============ -->
+<div class="auth" id="auth" hidden>
+  <div class="auth-art">
+    <div class="wordmark"><b>Talent <i>&amp;</i> Crew</b><span>Booking-desk ledger</span></div>
+    <h2>Call time.<br>Wrap.<br><em>Paid.</em></h2>
+    <div class="callsheet" aria-hidden="true">
+      <div><span>Call</span><b>06:00</b></div>
+      <div><span>Location</span><b>Studio 3, Via Tortona</b></div>
+      <div><span>Wrap</span><b>14:30 · 8.5 h</b></div>
+      <div><span>Receipts</span><b>Taxi · 1 photo</b></div>
+    </div>
+  </div>
+  <div class="auth-form">
+    <form id="login-form" novalidate>
+      <h1>Sign in</h1>
+      <p>Use the account your agency gave you.</p>
+      <div class="field"><label for="li-user">Username</label><input id="li-user" autocomplete="username" autocapitalize="none" spellcheck="false" required></div>
+      <div class="field"><label for="li-pass">Password</label><input id="li-pass" type="password" autocomplete="current-password" required></div>
+      <div class="err" id="li-err" hidden></div>
+      <button class="btn primary block" type="submit" id="li-btn">Sign in</button>
+    </form>
+    <form id="setup-form" novalidate hidden>
+      <h1>Set up your agency</h1>
+      <p>Create the first admin account. You'll add the rest of the team after.</p>
+      <div class="field"><label for="su-name">Your name</label><input id="su-name" autocomplete="name" required></div>
+      <div class="field"><label for="su-user">Username</label><input id="su-user" autocomplete="username" autocapitalize="none" spellcheck="false" required></div>
+      <div class="field"><label for="su-pass">Password</label><input id="su-pass" type="password" autocomplete="new-password" minlength="8" required><span class="hint">At least 8 characters.</span></div>
+      <div class="err" id="su-err" hidden></div>
+      <button class="btn primary block" type="submit" id="su-btn">Create admin account</button>
+    </form>
+  </div>
+</div>
+
+<!-- ============ App ============ -->
+<div class="app" id="app" hidden>
+  <aside class="rail">
+    <a class="wordmark" href="#team"><b>Talent <i>&amp;</i> Crew</b><span id="today"></span></a>
+    <nav class="nav" aria-label="Sections">
+      <a href="#team" data-tab="team"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5"/><circle cx="17" cy="9" r="2.4"/><path d="M15.5 14.2c2.6-.4 4.6 1.2 5 4.3"/></svg><span>Team</span></a>
+      <a href="#hours" data-tab="hours"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg><span>Hours</span></a>
+      <a href="#receipts" data-tab="receipts"><svg viewBox="0 0 24 24"><path d="M6 3.5h12v17l-2-1.4-2 1.4-2-1.4-2 1.4-2-1.4-2 1.4z"/><path d="M9 8.5h6M9 12h6M9 15.5h3.5"/></svg><span>Receipts</span><b class="count" id="nav-rec" hidden></b></a>
+      <a href="#payments" data-tab="payments"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12.5" rx="2"/><path d="M3 10h18M7 15h3"/></svg><span>Payments</span></a>
+      <a href="#settings" data-tab="settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span>Settings</span></a>
+    </nav>
+    <div class="rail-foot">
+      <button class="sync" id="sync" type="button" data-state="ok" title="Sync now"><span class="dot"></span><span id="sync-txt">Up to date</span></button>
+      <div class="me-chip" id="me-chip"></div>
+    </div>
+  </aside>
+
+  <main id="main">
+    <div class="banner" id="banner" hidden><span id="banner-txt"></span><button class="btn sm" type="button" id="banner-btn" hidden></button></div>
+
+    <section data-view="team">
+      <div class="view-head">
+        <div><h1>The board</h1><p>Who's where, what they've worked and what they're owed.</p></div>
+        <div class="view-actions"><button class="btn primary admin" type="button" data-act="add-person"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Add person</button></div>
+      </div>
+      <div class="summary" id="summary"></div>
+      <div class="filters">
+        <div class="seg" role="group" aria-label="Show" id="role-seg">
+          <button type="button" data-role="all" aria-pressed="true">Everyone</button>
+          <button type="button" data-role="model" aria-pressed="false">Models</button>
+          <button type="button" data-role="technician" aria-pressed="false">Technicians</button>
+          <button type="button" data-role="owed" aria-pressed="false">Owed</button>
+        </div>
+        <span class="grow"></span>
+        <input class="input search" id="q" type="search" placeholder="Search name or location" aria-label="Search people">
+      </div>
+      <div id="board"></div>
+    </section>
+
+    <section data-view="hours" hidden>
+      <div class="view-head">
+        <div><h1>Hours</h1><p>Every call and wrap, with the rate it was booked at.</p></div>
+        <div class="view-actions">
+          <button class="btn" type="button" data-export="hours"><svg viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>Export</button>
+          <button class="btn primary" type="button" data-act="add-shift"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Log hours</button>
+        </div>
+      </div>
+      <div class="filters">
+        <select id="h-person" aria-label="Person"></select>
+        <input type="month" id="h-month" aria-label="Month">
+        <button class="btn quiet sm" type="button" id="h-all">All time</button>
+      </div>
+      <div id="hours"></div>
+    </section>
+
+    <section data-view="receipts" hidden>
+      <div class="view-head">
+        <div><h1>Receipts</h1><p>Expenses people paid themselves, waiting to be paid back.</p></div>
+        <div class="view-actions">
+          <button class="btn" type="button" data-export="receipts"><svg viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>Export</button>
+          <button class="btn primary" type="button" data-act="add-receipt"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Add receipt</button>
+        </div>
+      </div>
+      <div class="filters">
+        <div class="seg" role="group" aria-label="Show" id="rec-seg">
+          <button type="button" data-rs="pending" aria-pressed="true">To reimburse</button>
+          <button type="button" data-rs="reimbursed" aria-pressed="false">Reimbursed</button>
+          <button type="button" data-rs="all" aria-pressed="false">All</button>
+        </div>
+        <select id="r-person" aria-label="Person"></select>
+      </div>
+      <div id="receipts"></div>
+    </section>
+
+    <section data-view="payments" hidden>
+      <div class="view-head">
+        <div><h1>Payments</h1><p>Money that has gone out, and what it covered.</p></div>
+        <div class="view-actions">
+          <button class="btn" type="button" data-export="payments"><svg viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>Export</button>
+          <button class="btn primary admin" type="button" data-act="add-payment"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Record payment</button>
+        </div>
+      </div>
+      <div class="filters"><select id="p-person" aria-label="Person"></select></div>
+      <div id="payments"></div>
+    </section>
+
+    <section data-view="settings" hidden>
+      <div class="view-head"><div><h1>Settings</h1><p>Your account, this device and the team's logins.</p></div></div>
+      <div class="settings" id="settings"></div>
+    </section>
+  </main>
+
+  <button class="fab" id="fab" type="button" aria-label="Add"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+</div>
+
+<!-- ============ Sheets ============ -->
+<dialog id="d-quick">
+  <div class="sheet-head"><h3>Add</h3><button class="x" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+  <div class="sheet-body"><div class="quick" id="quick"></div></div>
+</dialog>
+
+<dialog id="d-person">
+  <form class="sheet-form" novalidate>
+    <div class="sheet-head"><h3 id="pf-title">Add person</h3><button class="x" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="sheet-body">
+      <div class="field"><label for="pf-name">Full name</label><input id="pf-name" autocomplete="off" required></div>
+      <div class="grid2">
+        <div class="field"><label for="pf-role">Role</label><select id="pf-role"><option value="model">Model</option><option value="technician">Technician</option></select></div>
+        <div class="field"><label for="pf-rate">Hourly rate</label><input id="pf-rate" class="money-in" type="number" min="0" step="0.01" inputmode="decimal" required></div>
+      </div>
+      <div class="field"><label for="pf-spec">Speciality</label><input id="pf-spec" placeholder="Runway, editorial, lighting, hair &amp; make-up…" autocomplete="off"></div>
+      <div class="field"><label for="pf-loc">Current location</label><input id="pf-loc" placeholder="Studio 3, Via Tortona" autocomplete="off"></div>
+      <div class="field"><label for="pf-phone">Phone</label><input id="pf-phone" type="tel" autocomplete="off"></div>
+      <div class="err" id="pf-err" hidden></div>
+      <div class="sheet-foot">
+        <button class="btn danger left" type="button" id="pf-del" hidden>Delete</button>
+        <button class="btn" type="button" data-close>Cancel</button>
+        <button class="btn primary" type="submit">Save</button>
+      </div>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="d-loc">
+  <form class="sheet-form" novalidate>
+    <div class="sheet-head"><h3>Where is <span id="lf-who"></span>?</h3><button class="x" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="sheet-body">
+      <div class="field" id="lf-person-wrap"><label for="lf-person">Person</label><select id="lf-person"></select></div>
+      <div class="field"><label for="lf-loc">Location</label><input id="lf-loc" placeholder="On set — Piazza Duomo, Milan" autocomplete="off"><span class="hint">Leave it empty if you don't know.</span></div>
+      <div class="err" id="lf-err" hidden></div>
+      <div class="sheet-foot">
+        <button class="btn" type="button" data-close>Cancel</button>
+        <button class="btn primary" type="submit">Save location</button>
+      </div>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="d-shift">
+  <form class="sheet-form" novalidate>
+    <div class="sheet-head"><h3 id="sf-title">Log hours</h3><button class="x" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="sheet-body">
+      <div class="field"><label for="sf-person">Who worked</label><select id="sf-person"></select></div>
+      <div class="grid3">
+        <div class="field"><label for="sf-date">Date</label><input id="sf-date" type="date" required></div>
+        <div class="field"><label for="sf-start">Call</label><input id="sf-start" type="time"></div>
+        <div class="field"><label for="sf-end">Wrap</label><input id="sf-end" type="time"></div>
+      </div>
+      <div class="grid2">
+        <div class="field"><label for="sf-hours">Hours</label><input id="sf-hours" class="money-in" type="number" min="0" step="0.25" inputmode="decimal" required></div>
+        <div class="field"><label for="sf-rate">Rate per hour</label><input id="sf-rate" class="money-in" type="number" min="0" step="0.01" inputmode="decimal" required></div>
+      </div>
+      <div class="field"><label for="sf-job">Job or client</label><input id="sf-job" placeholder="Spring lookbook" autocomplete="off"></div>
+      <div class="field"><label for="sf-loc">Location</label><input id="sf-loc" placeholder="Where the job took place" autocomplete="off"></div>
+      <div class="calc" id="sf-calc" hidden></div>
+      <div class="err" id="sf-err" hidden></div>
+      <div class="sheet-foot">
+        <button class="btn danger left" type="button" id="sf-del" hidden>Delete</button>
+        <button class="btn" type="button" data-close>Cancel</button>
+        <button class="btn primary" type="submit">Save hours</button>
+      </div>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="d-receipt">
+  <form class="sheet-form" novalidate>
+    <div class="sheet-head"><h3>Add receipt</h3><button class="x" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="sheet-body">
+      <div class="capture" id="rf-capture">
+        <button type="button" id="rf-cam"><svg viewBox="0 0 24 24"><path d="M4 8h3l1.6-2.5h6.8L17 8h3v11H4z"/><circle cx="12" cy="13.2" r="3.6"/></svg>Take photo</button>
+        <button type="button" id="rf-pick"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><circle cx="9" cy="9.5" r="1.6"/><path d="M20 15.5l-4.5-4.5L6 20"/></svg>Choose file</button>
+      </div>
+      <div class="preview" id="rf-preview" hidden></div>
+      <input type="file" id="rf-cam-in" accept="image/*" capture="environment" hidden>
+      <input type="file" id="rf-file-in" accept="image/*,application/pdf" hidden>
+      <div class="field"><label for="rf-person">Who paid</label><select id="rf-person"></select></div>
+      <div class="grid2">
+        <div class="field"><label for="rf-amount">Amount</label><input id="rf-amount" class="money-in" type="number" min="0" step="0.01" inputmode="decimal" required></div>
+        <div class="field"><label for="rf-date">Date</label><input id="rf-date" type="date" required></div>
+      </div>
+      <div class="field"><label for="rf-desc">What it was for</label><input id="rf-desc" placeholder="Taxi to Malpensa, 06:00 call" autocomplete="off"></div>
+      <div class="err" id="rf-err" hidden></div>
+      <div class="sheet-foot">
+        <button class="btn" type="button" data-close>Cancel</button>
+        <button class="btn primary" type="submit">Save receipt</button>
+      </div>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="d-view" class="wide">
+  <div class="sheet-head"><h3 id="vw-title">Receipt</h3><button class="x" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+  <div class="sheet-body viewer" id="vw-body"></div>
+</dialog>
+
+<dialog id="d-pay">
+  <form class="sheet-form" novalidate>
+    <div class="sheet-head"><h3>Record payment</h3><button class="x" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="sheet-body">
+      <div class="field"><label for="yf-person">Paid to</label><select id="yf-person"></select></div>
+      <div class="calc" id="yf-bal"></div>
+      <div class="grid2">
+        <div class="field"><label for="yf-amount">Wages paid</label><input id="yf-amount" class="money-in" type="number" min="0" step="0.01" inputmode="decimal"></div>
+        <div class="field"><label for="yf-date">Date</label><input id="yf-date" type="date" required></div>
+      </div>
+      <div class="field"><label for="yf-method">Method</label><select id="yf-method"><option>Bank transfer</option><option>Cash</option><option>Card</option><option>Other</option></select></div>
+      <label class="check" id="yf-rec-wrap" hidden><input type="checkbox" id="yf-rec" checked><span id="yf-rec-lbl"></span></label>
+      <div class="field"><label for="yf-note">Note</label><input id="yf-note" placeholder="Invoice 2026-114" autocomplete="off"></div>
+      <div class="err" id="yf-err" hidden></div>
+      <div class="sheet-foot">
+        <button class="btn" type="button" data-close>Cancel</button>
+        <button class="btn primary" type="submit">Record payment</button>
+      </div>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="d-detail" class="wide">
+  <div class="sheet-head"><h3 id="dt-title"></h3><button class="x" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+  <div class="sheet-body detail" id="dt-body"></div>
+</dialog>
+
+<dialog id="d-account">
+  <form class="sheet-form" novalidate>
+    <div class="sheet-head"><h3 id="af-title">Add login</h3><button class="x" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="sheet-body">
+      <div class="field" id="af-name-wrap"><label for="af-name">Name</label><input id="af-name" autocomplete="off"></div>
+      <div class="field" id="af-user-wrap"><label for="af-user">Username</label><input id="af-user" autocomplete="off" autocapitalize="none" spellcheck="false"></div>
+      <div class="field" id="af-role-wrap"><label for="af-role">Access</label>
+        <select id="af-role"><option value="staff">Staff — logs hours, receipts and locations</option><option value="admin">Admin — also manages people, rates and payments</option></select></div>
+      <div class="field"><label for="af-pass" id="af-pass-lbl">Password</label><input id="af-pass" type="text" autocomplete="new-password" spellcheck="false"><span class="hint">At least 8 characters. Share it with them privately.</span></div>
+      <div class="err" id="af-err" hidden></div>
+      <div class="sheet-foot">
+        <button class="btn" type="button" data-close>Cancel</button>
+        <button class="btn primary" type="submit" id="af-btn">Create login</button>
+      </div>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="d-password">
+  <form class="sheet-form" novalidate>
+    <div class="sheet-head"><h3>Change your password</h3><button class="x" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="sheet-body">
+      <div class="field"><label for="cp-cur">Current password</label><input id="cp-cur" type="password" autocomplete="current-password"></div>
+      <div class="field"><label for="cp-new">New password</label><input id="cp-new" type="password" autocomplete="new-password"><span class="hint">At least 8 characters.</span></div>
+      <div class="err" id="cp-err" hidden></div>
+      <div class="sheet-foot">
+        <button class="btn" type="button" data-close>Cancel</button>
+        <button class="btn primary" type="submit">Change password</button>
+      </div>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" role="status" hidden></div>
+</body>
+</html>

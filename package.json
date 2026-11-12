@@ -1,0 +1,11 @@
+{
+  "name": "talent-crew",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Ledger for a modeling agency: locations, hours, amounts owed, payments and receipt photos. Works offline as an installable app.",
+  "type": "module",
+  "engines": { "node": ">=22.5" },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning server/server.js"
+  }
+}

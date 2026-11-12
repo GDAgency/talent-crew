@@ -132,6 +132,7 @@
         <div><h1>Payments</h1><p>Money that has gone out, and what it covered.</p></div>
         <div class="view-actions">
           <button class="btn" type="button" data-export="payments"><svg viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>Export</button>
+          <button class="btn" type="button" data-act="statement"><svg viewBox="0 0 24 24"><path d="M7 3.5h7l4 4v13H7z"/><path d="M14 3.5v4h4M10 12h5M10 15.5h5"/></svg>Statements</button>
           <button class="btn primary admin" type="button" data-act="add-payment"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Record payment</button>
         </div>
       </div>
@@ -161,8 +162,24 @@
       <div class="field"><label for="pf-name">Full name</label><input id="pf-name" autocomplete="off" required></div>
       <div class="grid2">
         <div class="field"><label for="pf-role">Role</label><select id="pf-role"><option value="model">Model</option><option value="technician">Technician</option></select></div>
-        <div class="field"><label for="pf-rate">Hourly rate</label><input id="pf-rate" class="money-in" type="number" min="0" step="0.01" inputmode="decimal" required></div>
+        <div class="field"><label for="pf-paytype">Paid</label><select id="pf-paytype"><option value="hourly">By the hour</option><option value="day">By the day</option></select></div>
       </div>
+      <fieldset class="terms">
+        <legend>Pay terms</legend>
+        <div class="grid2">
+          <div class="field" id="pf-day-wrap" hidden><label for="pf-dayrate">Day rate</label><input id="pf-dayrate" class="money-in" type="number" min="0" step="0.01" inputmode="decimal"></div>
+          <div class="field"><label for="pf-rate">Hourly rate</label><input id="pf-rate" class="money-in" type="number" min="0" step="0.01" inputmode="decimal" required></div>
+        </div>
+        <div class="grid2" id="pf-half-wrap" hidden>
+          <div class="field"><label for="pf-halfrate">Half-day rate</label><input id="pf-halfrate" class="money-in" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Optional"></div>
+          <div class="field"><label for="pf-halfunder">For shifts under</label><span class="unit"><input id="pf-halfunder" class="money-in" type="number" min="0" max="24" step="0.25" inputmode="decimal" placeholder="5"><span>h</span></span></div>
+        </div>
+        <div class="grid2">
+          <div class="field"><label for="pf-otafter">Overtime after</label><span class="unit"><input id="pf-otafter" class="money-in" type="number" min="0" max="24" step="0.25" inputmode="decimal" placeholder="None"><span>h</span></span></div>
+          <div class="field"><label for="pf-otmult">Overtime pays</label><span class="unit"><input id="pf-otmult" class="money-in" type="number" min="1" max="5" step="0.05" inputmode="decimal" placeholder="1.5"><span>× rate</span></span></div>
+        </div>
+        <p class="hint" id="pf-terms"></p>
+      </fieldset>
       <div class="field"><label for="pf-spec">Speciality</label><input id="pf-spec" placeholder="Runway, editorial, lighting, hair &amp; make-up…" autocomplete="off"></div>
       <div class="field"><label for="pf-loc">Current location</label><input id="pf-loc" placeholder="Studio 3, Via Tortona" autocomplete="off"></div>
       <div class="field"><label for="pf-phone">Phone</label><input id="pf-phone" type="tel" autocomplete="off"></div>
@@ -276,6 +293,29 @@
   <div class="sheet-body detail" id="dt-body"></div>
 </dialog>
 
+<dialog id="d-statement" class="wide">
+  <div class="sheet-head"><h3>Statement</h3><button class="x" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+  <div class="sheet-body">
+    <div class="st-ctl">
+      <div class="field st-who"><label for="st-person">Person</label><select id="st-person"></select></div>
+      <div class="field st-when"><span class="lbl">Period</span>
+        <div class="st-period">
+          <div class="seg" role="group" aria-label="Period" id="st-mode"><button type="button" data-mode="month" aria-pressed="true">Month</button><button type="button" data-mode="range" aria-pressed="false">Custom</button></div>
+          <input type="month" id="st-month" aria-label="Month">
+          <span class="st-range" id="st-range" hidden><input type="date" id="st-from" aria-label="From"><span>to</span><input type="date" id="st-to" aria-label="To"></span>
+        </div>
+      </div>
+    </div>
+    <div class="st-acts">
+      <button class="btn sm" type="button" id="st-print"><svg viewBox="0 0 24 24"><path d="M7 9V4h10v5M7 17H4.5v-7h15v7H17"/><path d="M7 14h10v6H7z"/></svg>Print</button>
+      <button class="btn sm" type="button" id="st-html"><svg viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>HTML</button>
+      <button class="btn sm" type="button" id="st-csv"><svg viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>CSV</button>
+      <button class="btn quiet sm end" type="button" id="st-all" title="One row per person for this period">Everyone · CSV</button>
+    </div>
+    <div class="st-stage" id="st-doc"></div>
+  </div>
+</dialog>
+
 <dialog id="d-account">
   <form class="sheet-form" novalidate>
     <div class="sheet-head"><h3 id="af-title">Add login</h3><button class="x" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
@@ -310,5 +350,6 @@
 </dialog>
 
 <div class="toast" id="toast" role="status" hidden></div>
+<div class="print-root" id="print-root" aria-hidden="true"></div>
 </body>
 </html>

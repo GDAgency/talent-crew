@@ -407,6 +407,97 @@ dialog::backdrop { background: var(--scrim); }
 .detail h4 { margin: 6px 0 -4px; }
 .detail table { min-width: 460px; }
 
+/* ---------- Pay terms (person form) ---------- */
+.terms { margin: 0; padding: 12px 14px 14px; border: 1px solid var(--line); border-radius: var(--r-md); display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.terms legend { padding: 0 6px; margin-left: -6px; font-size: var(--t-xs); font-weight: 600; text-transform: uppercase; letter-spacing: .11em; color: var(--muted); }
+.terms .hint { margin: 0; }
+.terms .hint:empty { display: none; }
+.unit { position: relative; display: block; }
+.field .unit input { padding-right: 62px; }
+.unit > span { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); font-size: var(--t-sm); color: var(--muted); pointer-events: none; white-space: nowrap; }
+
+/* ---------- Statement sheet ---------- */
+.st-ctl { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: end; }
+.st-period { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.st-period .seg button { padding: 9px 12px; }
+.field .st-period input { width: auto; }
+.st-range { display: inline-flex; gap: 8px; align-items: center; flex-wrap: wrap; color: var(--muted); font-size: var(--t-sm); }
+.st-acts { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.st-acts .end { margin-left: auto; }
+.st-stage { background: var(--sunken); border-radius: var(--r-md); padding: 18px; }
+@media (max-width: 680px) {
+  .st-ctl { grid-template-columns: minmax(0, 1fr); }
+  .st-stage { padding: 8px; margin: 0 -12px; border-radius: 0; }
+  .field .st-period input { flex: 1 1 150px; min-width: 0; }
+}
+
+/* ---------- Statement document (also the downloaded file and the printout) ---------- */
+.stmt {
+  background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: var(--r-sm); box-shadow: var(--shadow-1);
+  padding: 36px 40px 26px; display: flex; flex-direction: column; gap: 26px; font-family: var(--f-body); font-size: 13.5px; line-height: 1.45; min-width: 0;
+}
+.stmt-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 18px 28px; flex-wrap: wrap; padding-bottom: 18px; border-bottom: 2px solid var(--ink); }
+.stmt-from { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.stmt-agency { font-family: var(--f-display); font-stretch: 125%; font-weight: 800; font-size: 19px; text-transform: uppercase; letter-spacing: .02em; line-height: 1.05; overflow-wrap: anywhere; }
+.stmt-kind { font-family: var(--f-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.stmt-meta { margin: 0; display: flex; gap: 28px; }
+.stmt-meta div { display: flex; flex-direction: column; gap: 3px; }
+.stmt-k, .stmt-meta dt { font-size: 10px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.stmt-meta dd { margin: 0; font-family: var(--f-mono); font-size: 12.5px; white-space: nowrap; }
+.stmt-band { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 20px; align-items: end; }
+.stmt-payee { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.stmt-payee p { margin: 0; color: var(--ink-2); }
+.stmt-payee p:empty { display: none; }
+.stmt-name { margin: 2px 0 2px; font-family: var(--f-display); font-stretch: 78%; font-weight: 800; font-size: 36px; line-height: .95; text-transform: uppercase; letter-spacing: .005em; overflow-wrap: anywhere; }
+.stmt-payee .stmt-terms { font-family: var(--f-mono); font-size: 11.5px; color: var(--muted); }
+.stmt-due { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; padding: 14px 18px; border-radius: var(--r-md); background: var(--owed-wash); color: var(--owed); text-align: right; min-width: 220px; }
+.stmt-due.paid { background: var(--paid-wash); color: var(--paid); }
+.stmt-due.over { background: var(--risk-wash); color: var(--risk); }
+.stmt-due .stmt-k { color: inherit; }
+.stmt-due b { font-family: var(--f-mono); font-variant-numeric: tabular-nums; font-weight: 500; font-size: 30px; letter-spacing: -.03em; line-height: 1.1; }
+.stmt-due > span:last-child { font-size: 11.5px; color: var(--ink-2); }
+.stmt-recon { display: flex; flex-direction: column; border-top: 1px solid var(--line-strong); }
+.stmt-recon > div { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding: 7px 0; border-bottom: 1px solid var(--line); }
+.stmt-recon em { font-style: normal; color: var(--muted); margin-left: 10px; font-size: 12px; }
+.stmt-recon b { font-family: var(--f-mono); font-variant-numeric: tabular-nums; font-weight: 500; white-space: nowrap; }
+.stmt-sign { display: inline-block; width: 1.3em; color: var(--muted); }
+.stmt-recon .total { border-bottom: 0; border-top: 2px solid var(--ink); margin-top: -1px; padding-top: 9px; font-weight: 600; }
+.stmt-recon .total b { font-weight: 600; font-size: 16px; }
+.stmt-sec h3 { margin: 0 0 6px; font-size: 10.5px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--ink); }
+.stmt-scroll { overflow-x: auto; }
+.stmt table { width: 100%; min-width: 520px; border-collapse: collapse; font-size: 12.5px; }
+.stmt th, .stmt td { padding: 7px 12px 7px 0; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; background: none; }
+.stmt th:last-child, .stmt td:last-child { padding-right: 0; }
+.stmt th { font-family: var(--f-body); font-size: 10px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); white-space: nowrap; border-bottom-color: var(--line-strong); }
+.stmt td.n, .stmt th.n { text-align: right; white-space: nowrap; }
+.stmt td.n { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.stmt td .sub { display: block; font-size: 11.5px; color: var(--muted); }
+.stmt td.basis { font-family: var(--f-mono); font-size: 11.5px; color: var(--ink-2); }
+.stmt tbody tr:hover td { background: none; }
+.stmt tfoot td { background: none; border-top: 1px solid var(--ink); border-bottom: 0; font-weight: 600; }
+.stmt-none { margin: 0; padding: 9px 0; color: var(--muted); border-top: 1px solid var(--line-strong); }
+.stmt-foot { padding-top: 12px; border-top: 1px solid var(--line); font-size: 11.5px; color: var(--muted); }
+@media (max-width: 600px) {
+  .stmt { padding: 22px 16px 16px; gap: 20px; }
+  .stmt-band { grid-template-columns: minmax(0, 1fr); }
+  .stmt-due { align-items: flex-start; text-align: left; min-width: 0; }
+  .stmt-name { font-size: 30px; }
+  .stmt-recon em { display: block; margin: 0; }
+}
+@media print {
+  @page { size: A4; margin: 14mm 14mm 16mm; }
+  .stmt {
+    --surface: #fff; --sunken: #f2f2f2; --ink: #000; --ink-2: #222; --muted: #555; --line: #cfcfcf; --line-strong: #8a8a8a;
+    --owed: #000; --owed-wash: #fff; --paid: #000; --paid-wash: #fff; --risk: #000; --risk-wash: #fff;
+    background: #fff; color: #000; border: 0; border-radius: 0; box-shadow: none; padding: 0; font-size: 10pt;
+  }
+  .stmt-due { border: 1.5px solid #000; }
+  .stmt-scroll { overflow: visible; }
+  .stmt table { min-width: 0; }
+  .stmt tr, .stmt-top, .stmt-band, .stmt-recon { break-inside: avoid; }
+  .stmt-sec h3 { break-after: avoid; }
+}
+
 /* ---------- Toast ---------- */
 .toast {
   position: fixed; left: 50%; transform: translateX(-50%); z-index: 100;
@@ -631,6 +722,7 @@ dialog::backdrop { background: var(--scrim); }
         <div><h1>Payments</h1><p>Money that has gone out, and what it covered.</p></div>
         <div class="view-actions">
           <button class="btn" type="button" data-export="payments" hidden><svg viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>Export</button>
+          <button class="btn" type="button" data-act="statement"><svg viewBox="0 0 24 24"><path d="M7 3.5h7l4 4v13H7z"/><path d="M14 3.5v4h4M10 12h5M10 15.5h5"/></svg>Statements</button>
           <button class="btn primary admin" type="button" data-act="add-payment"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Record payment</button>
         </div>
       </div>
@@ -659,8 +751,24 @@ dialog::backdrop { background: var(--scrim); }
       <div class="field"><label for="pf-name">Full name</label><input id="pf-name" autocomplete="off" required></div>
       <div class="grid2">
         <div class="field"><label for="pf-role">Role</label><select id="pf-role"><option value="model">Model</option><option value="technician">Technician</option></select></div>
-        <div class="field"><label for="pf-rate">Hourly rate</label><input id="pf-rate" class="money-in" type="number" min="0" step="0.01" inputmode="decimal" required></div>
+        <div class="field"><label for="pf-paytype">Paid</label><select id="pf-paytype"><option value="hourly">By the hour</option><option value="day">By the day</option></select></div>
       </div>
+      <fieldset class="terms">
+        <legend>Pay terms</legend>
+        <div class="grid2">
+          <div class="field" id="pf-day-wrap" hidden><label for="pf-dayrate">Day rate</label><input id="pf-dayrate" class="money-in" type="number" min="0" step="0.01" inputmode="decimal"></div>
+          <div class="field"><label for="pf-rate">Hourly rate</label><input id="pf-rate" class="money-in" type="number" min="0" step="0.01" inputmode="decimal" required></div>
+        </div>
+        <div class="grid2" id="pf-half-wrap" hidden>
+          <div class="field"><label for="pf-halfrate">Half-day rate</label><input id="pf-halfrate" class="money-in" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Optional"></div>
+          <div class="field"><label for="pf-halfunder">For shifts under</label><span class="unit"><input id="pf-halfunder" class="money-in" type="number" min="0" max="24" step="0.25" inputmode="decimal" placeholder="5"><span>h</span></span></div>
+        </div>
+        <div class="grid2">
+          <div class="field"><label for="pf-otafter">Overtime after</label><span class="unit"><input id="pf-otafter" class="money-in" type="number" min="0" max="24" step="0.25" inputmode="decimal" placeholder="None"><span>h</span></span></div>
+          <div class="field"><label for="pf-otmult">Overtime pays</label><span class="unit"><input id="pf-otmult" class="money-in" type="number" min="1" max="5" step="0.05" inputmode="decimal" placeholder="1.5"><span>× rate</span></span></div>
+        </div>
+        <p class="hint" id="pf-terms"></p>
+      </fieldset>
       <div class="field"><label for="pf-spec">Speciality</label><input id="pf-spec" placeholder="Runway, editorial, lighting, hair &amp; make-up…" autocomplete="off"></div>
       <div class="field"><label for="pf-loc">Current location</label><input id="pf-loc" placeholder="Studio 3, Via Tortona" autocomplete="off"></div>
       <div class="field"><label for="pf-phone">Phone</label><input id="pf-phone" type="tel" autocomplete="off"></div>
@@ -814,6 +922,28 @@ dialog::backdrop { background: var(--scrim); }
   </form>
 </dialog>
 
+<dialog id="d-statement" class="wide">
+  <div class="sheet-head"><h3>Statement</h3><button class="x" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+  <div class="sheet-body">
+    <div class="st-ctl">
+      <div class="field st-who"><label for="st-person">Person</label><select id="st-person"></select></div>
+      <div class="field st-when"><span class="lbl">Period</span>
+        <div class="st-period">
+          <div class="seg" role="group" aria-label="Period" id="st-mode"><button type="button" data-mode="month" aria-pressed="true">Month</button><button type="button" data-mode="range" aria-pressed="false">Custom</button></div>
+          <input type="month" id="st-month" aria-label="Month">
+          <span class="st-range" id="st-range" hidden><input type="date" id="st-from" aria-label="From"><span>to</span><input type="date" id="st-to" aria-label="To"></span>
+        </div>
+      </div>
+    </div>
+    <div class="st-acts">
+      <button class="btn sm" type="button" id="st-html" data-dl><svg viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>HTML</button>
+      <button class="btn sm" type="button" id="st-csv" data-dl><svg viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>CSV</button>
+      <button class="btn quiet sm end" type="button" id="st-all" data-dl title="One row per person for this period">Everyone · CSV</button>
+    </div>
+    <div class="st-stage" id="st-doc"></div>
+  </div>
+</dialog>
+
 <div class="toast" id="toast" role="status" hidden></div>
 
 <script>
@@ -826,7 +956,8 @@ dialog::backdrop { background: var(--scrim); }
      receipts/{id}     expense + photo asset id                     — anyone who can contribute
      reimbursed/{id}   marks a receipt paid back (id = receipt id)  — Editors only
      payments/{id}     money paid out                               — Editors only
-     settings/main     currency                                     — Editors only
+     settings/main     currency, agencyName, payTermsFrozen         — Editors only
+     payterms/{id}     pay terms an Editor confirmed for a shift    — Editors only (id = shift id)
      jobs/{id}         booking: client, dates, call, location, people[],
                        billing, fee, clientRate, invoiceStatus      — Editors only
                        (shifts and receipts may carry an optional jobId)
@@ -876,11 +1007,11 @@ dialog::backdrop { background: var(--scrim); }
   const memOutbox = new Map(); // fallback when device storage is unavailable
 
   // ---------- State ----------
-  const SRC = ["people", "locations", "shifts", "payments", "receipts", "reimbursed", "settings", "jobs"];
+  const SRC = ["people", "locations", "shifts", "payments", "receipts", "reimbursed", "settings", "payterms", "jobs"];
   const server = Object.fromEntries(SRC.map((c) => [c, new Map()]));
   let outbox = new Map();          // key "c/id" -> { key, c, id, data|null, at }
   let localPhotos = new Map();     // receipt id -> object URL of a photo not yet uploaded
-  const state = { people: [], shifts: [], payments: [], receipts: [], jobs: [], settings: { currency: "EUR" } };
+  const state = { people: [], shifts: [], payments: [], receipts: [], jobs: [], settings: { currency: "EUR" }, payterms: new Map() };
   const ui = { tab: "team", role: "all", q: "", hPerson: "", hMonth: isoMonth(), rStatus: "pending", rPerson: "", pPerson: "" };
   let db = null, user = null, assets = null, downloads = null, myId = null;
   let admin = false, writer = true, available = true;
@@ -902,6 +1033,7 @@ dialog::backdrop { background: var(--scrim); }
     state.receipts = [...merged("receipts").values()].map((r) => { const x = reimb.get(r.id); return { ...r, status: x ? "reimbursed" : "pending", reimbursedAt: x?.date || null }; });
     state.settings = { currency: "EUR", ...(merged("settings").get("main") || {}) };
     state.jobs = [...merged("jobs").values()];
+    state.payterms = merged("payterms");
   }
   const pendingCount = () => outbox.size + localPhotos.size;
   const isPending = (c, id) => outbox.has(c + "/" + id);
@@ -999,7 +1131,7 @@ dialog::backdrop { background: var(--scrim); }
     for (const s of state.shifts) {
       const b = map.get(s.personId); if (!b) continue;
       const h = Number(s.hours) || 0;
-      b.earned += h * (Number(s.rate) || 0); b.hAll += h;
+      b.earned += shiftPay(s).amount; b.hAll += h;
       if ((s.date || "").startsWith(m)) b.hMonth += h;
     }
     for (const p of state.payments) { const b = map.get(p.personId); if (b) b.paid += Number(p.amount) || 0; }
@@ -1009,6 +1141,88 @@ dialog::backdrop { background: var(--scrim); }
   }
   const statusPill = (b) => b.owed > 0.004 ? `<span class="pill owed">Owed</span>` : b.owed < -0.004 ? `<span class="pill over">Overpaid</span>` : `<span class="pill paid">Paid up</span>`;
 
+  // ---------- Pay rules ----------
+  // Terms are set per person by an admin and copied onto every shift when it's logged
+  // (like the old `rate` snapshot), so changing someone's rate never rewrites history.
+  // Missing fields mean hourly with no overtime: old shifts still pay hours × rate.
+  const posNum = (v) => { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : 0; };
+  function payTerms(x) {
+    x = x || {};
+    const day = x.payType === "day";
+    return {
+      payType: day ? "day" : "hourly", rate: Number(x.rate) || 0,
+      dayRate: day ? posNum(x.dayRate) : 0, halfDayRate: day ? posNum(x.halfDayRate) : 0, halfDayUnder: day ? posNum(x.halfDayUnder) : 0,
+      otAfter: posNum(x.otAfter), otMult: posNum(x.otMult) || 1,
+    };
+  }
+  // Pure: hours + terms -> pay. Overtime hours (past otAfter in one shift) are paid at rate × otMult,
+  // on top of the day rate for day-rate people. A half-day rate applies to shifts under halfDayUnder hours.
+  function payCalc(hours, t) {
+    const h = Number(hours) || 0;
+    const ot = t.otAfter > 0 && h > t.otAfter ? h - t.otAfter : 0;
+    const reg = h - ot, otPay = ot * t.rate * t.otMult;
+    if (t.payType === "day") {
+      const half = t.halfDayRate > 0 && t.halfDayUnder > 0 && h < t.halfDayUnder;
+      return { amount: (half ? t.halfDayRate : t.dayRate) + otPay, regularHours: reg, overtimeHours: ot, basis: half ? "half-day" : "day" };
+    }
+    return { amount: reg * t.rate + otPay, regularHours: reg, overtimeHours: ot, basis: "hourly" };
+  }
+  // The terms a shift is paid under. Contributors can write any field of a shift, so its own
+  // snapshot is only trusted once an Editor confirmed it (payterms/{shiftId}, Editors only).
+  // Otherwise the person's current terms apply (people/ is Editors only), and an Editor's device
+  // confirms a person's open shifts before their terms change, so history isn't rewritten.
+  // Until the one-time freeze has run (settings.payTermsFrozen), shifts keep paying as before.
+  function shiftTerms(s) {
+    const t = state.payterms.get(s.id);
+    if (t) return payTerms(t);
+    if (!state.settings.payTermsFrozen) return payTerms(s);
+    const p = state.people.find((x) => x.id === s.personId);
+    return payTerms(p || s);
+  }
+  // The one place a shift's earnings come from: { amount, regularHours, overtimeHours, basis }.
+  const shiftPay = (s) => payCalc(s.hours, shiftTerms(s));
+  // Which shifts count towards pay (hook for an approval filter).
+  const countsForPay = () => true;
+  const fmtMult = (m) => (Math.round(m * 100) / 100).toLocaleString(locale) + "×";
+  function termsText(t) {
+    const parts = t.payType === "day"
+      ? [`${money(t.dayRate)} a day`, ...(t.halfDayRate && t.halfDayUnder ? [`${money(t.halfDayRate)} half day under ${hrs(t.halfDayUnder)}`] : [])]
+      : [`${money(t.rate)} / h`];
+    if (t.otAfter) parts.push(`overtime after ${hrs(t.otAfter)} at ${fmtMult(t.otMult)}${t.payType === "day" ? ` of ${money(t.rate)} / h` : ""}`);
+    return parts.join(" · ");
+  }
+  // "8 h × €25.00 + 2 h overtime × €25.00 × 1.5 = €275.00", "Day rate €400.00", …
+  function payExplain(hours, t, total = true) {
+    const p = payCalc(hours, t);
+    const ot = p.overtimeHours ? ` + ${hrs(p.overtimeHours)} overtime × ${money(t.rate)} × ${(Math.round(t.otMult * 100) / 100).toLocaleString(locale)}` : "";
+    if (t.payType === "day") {
+      const base = p.basis === "half-day" ? `Half day (under ${hrs(t.halfDayUnder)}) ${money(t.halfDayRate)}` : `Day rate ${money(t.dayRate)}`;
+      return base + ot + (ot && total ? ` = ${money(p.amount)}` : "");
+    }
+    return `${hrs(p.regularHours)} × ${money(t.rate)}${ot}${total ? ` = ${money(p.amount)}` : ""}`;
+  }
+  const otSub = (s) => { const o = shiftPay(s).overtimeHours; return o ? `<span class="sub">${hrs(o)} overtime</span>` : ""; };
+  const rateCell = (t) => (t.payType === "day" ? `${money(t.dayRate)}<span class="sub">a day</span>` : money(t.rate));
+
+  const sameTerms = (a, b) => JSON.stringify(payTerms(a)) === JSON.stringify(payTerms(b));
+  // Editors: confirm the terms of shifts that aren't confirmed yet (before a person's terms change).
+  async function confirmShiftTerms(shifts) {
+    if (!admin) return;
+    for (const s of shifts) if (!state.payterms.has(s.id)) await put("payterms", s.id, { ...shiftTerms(s), by: myId });
+  }
+  // One time, on an Editor's device: freeze shifts logged before pay rules whose snapshot differs
+  // from their person's current terms, then switch everyone to trusted terms.
+  let freezing = false;
+  async function freezeOldShifts() {
+    if (!admin || freezing || state.settings.payTermsFrozen || got.size < SRC.length) return;
+    freezing = true;
+    try {
+      const people = new Map(state.people.map((p) => [p.id, p]));
+      await confirmShiftTerms(state.shifts.filter((s) => !people.has(s.personId) || !sameTerms(s, people.get(s.personId))));
+      await put("settings", "main", { ...state.settings, payTermsFrozen: Date.now() });
+    } finally { freezing = false; }
+  }
+
   // ---------- Render ----------
   function render() {
     const bal = balances();
@@ -1016,7 +1230,7 @@ dialog::backdrop { background: var(--scrim); }
     const nr = $("#nav-rec"); nr.textContent = recOpen.length; nr.hidden = !recOpen.length;
     $$(".admin").forEach((el) => (el.hidden = !admin));
     $$(".writer").forEach((el) => (el.hidden = !writer || !available));
-    $$("[data-export]").forEach((el) => (el.hidden = !downloads));
+    $$("[data-export], [data-dl]").forEach((el) => (el.hidden = !downloads));
     fillFilters();
     if (ui.tab === "team") renderTeam(bal, recOpen);
     if (ui.tab === "hours") renderHours();
@@ -1025,6 +1239,7 @@ dialog::backdrop { background: var(--scrim); }
     if (ui.tab === "prefs") renderSettings();
     renderJobsHook(); // jobs view + open job sheet
     if ($("#d-detail").open && detailId) renderDetail(detailId);
+    if ($("#d-statement").open) renderStatement();
     paintSync();
   }
   const empty = (title, text, act, label) => `<div class="empty"><h3>${esc(title)}</h3><p>${esc(text)}</p>${act && writer && available ? `<button class="btn primary" type="button" data-act="${act}">${esc(label)}</button>` : ""}</div>`;
@@ -1033,7 +1248,7 @@ dialog::backdrop { background: var(--scrim); }
     let owed = 0, earnedMonth = 0, hMonth = 0, onJob = 0;
     const m = isoMonth(), today = isoDay();
     for (const b of bal.values()) { if (b.owed > 0) owed += b.owed; hMonth += b.hMonth; }
-    for (const s of state.shifts) if ((s.date || "").startsWith(m) && bal.has(s.personId)) earnedMonth += (Number(s.hours) || 0) * (Number(s.rate) || 0);
+    for (const s of state.shifts) if ((s.date || "").startsWith(m) && bal.has(s.personId)) earnedMonth += shiftPay(s).amount;
     for (const p of state.people) if (p.location && p.locationAt && isoDay(new Date(p.locationAt)) === today) onJob++;
     const owedPeople = [...bal.values()].filter((b) => b.owed > 0.004).length;
     const recSum = recOpen.reduce((a, r) => a + (Number(r.amount) || 0), 0);
@@ -1114,9 +1329,9 @@ dialog::backdrop { background: var(--scrim); }
       return;
     }
     let th = 0, tv = 0;
-    for (const s of rows) { th += Number(s.hours) || 0; tv += (Number(s.hours) || 0) * (Number(s.rate) || 0); }
+    for (const s of rows) { th += Number(s.hours) || 0; tv += shiftPay(s).amount; }
     const period = ui.hMonth ? new Date(ui.hMonth + "-01T12:00").toLocaleDateString(locale, { month: "long", year: "numeric" }) : "all time";
-    const earned = (s) => money((Number(s.hours) || 0) * (Number(s.rate) || 0));
+    const earned = (s) => money(shiftPay(s).amount);
     el.innerHTML = `<div class="tablebox hours-table"><table>
       <thead><tr><th>Date</th><th>Person</th><th>Job · location</th><th class="n">Call–wrap</th><th class="n">Hours</th><th class="n">Rate</th><th class="n">Earned</th><th></th></tr></thead>
       <tbody>${rows.map((s) => `<tr>
@@ -1124,7 +1339,7 @@ dialog::backdrop { background: var(--scrim); }
         <td class="who">${esc(personName(s.personId))}</td>
         <td>${esc(s.job || "—")}${s.location ? `<span class="sub">${esc(s.location)}</span>` : ""}</td>
         <td class="n">${s.start && s.end ? `${esc(s.start)}–${esc(s.end)}` : `<span class="muted">—</span>`}</td>
-        <td class="n">${hrs(s.hours)}</td><td class="n">${money(s.rate)}</td><td class="n">${earned(s)}</td>
+        <td class="n">${hrs(s.hours)}${otSub(s)}</td><td class="n">${rateCell(shiftTerms(s))}</td><td class="n">${earned(s)}</td>
         <td class="n">${mine(s) ? `<button class="btn quiet sm" type="button" data-act="edit-shift" data-id="${s.id}">Edit</button>` : ""}</td>
       </tr>`).join("")}</tbody>
       <tfoot><tr><td colspan="4">${rows.length} ${rows.length === 1 ? "entry" : "entries"} · ${esc(period)}</td><td class="n">${hrs(th)}</td><td></td><td class="n">${money(tv)}</td><td></td></tr></tfoot>
@@ -1193,6 +1408,8 @@ dialog::backdrop { background: var(--scrim); }
 
   function renderSettings() {
     const n = pendingCount();
+    const ag = document.activeElement?.id === "agency" ? document.activeElement : null;
+    const agencyDraft = ag ? [ag.value, ag.selectionStart ?? ag.value.length] : null; // keep typing across a background redraw
     const level = !available ? "Not signed in" : admin ? "Editor — full access" : writer ? "Contributor — logs hours, receipts and locations" : "Viewer — can look, not change";
     $("#settings").innerHTML = `
       <section class="panel">
@@ -1217,8 +1434,14 @@ dialog::backdrop { background: var(--scrim); }
         <h2>Currency</h2>
         <div class="field"><label for="currency">Amounts are shown in</label>
           <select id="currency">${[["EUR", "Euro (€)"], ["GBP", "Pound (£)"], ["USD", "US dollar ($)"], ["CHF", "Swiss franc (CHF)"]].map(([v, l]) => `<option value="${v}" ${state.settings.currency === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>
+      </section>
+      <section class="panel">
+        <h2>Statements</h2>
+        <div class="field"><label for="agency">Agency name</label><input id="agency" maxlength="80" autocomplete="organization" placeholder="Talent &amp; Crew" value="${esc(state.settings.agencyName || "")}"><span class="hint">Printed at the top of every statement.</span></div>
       </section>` : ""}`;
+    if (agencyDraft && $("#agency")) { const a = $("#agency"); a.value = agencyDraft[0]; a.focus(); a.setSelectionRange(agencyDraft[1], agencyDraft[1]); }
     $("#currency")?.addEventListener("change", (e) => put("settings", "main", { ...state.settings, currency: e.target.value }).then(() => toast("Currency saved")));
+    $("#agency")?.addEventListener("change", (e) => put("settings", "main", { ...state.settings, agencyName: e.target.value.trim().slice(0, 80) }).then(() => toast("Agency name saved")));
   }
 
   // ---------- Person detail ----------
@@ -1236,7 +1459,7 @@ dialog::backdrop { background: var(--scrim); }
     $("#dt-body").innerHTML = `
       <dl class="kv">
         <dt>Role</dt><dd>${roleLabel(p.role)}${p.speciality ? " · " + esc(p.speciality) : ""}</dd>
-        <dt>Rate</dt><dd class="mono">${money(p.rate)} / h</dd>
+        <dt>Pay</dt><dd class="mono">${esc(termsText(payTerms(p)))}</dd>
         <dt>Location</dt><dd>${p.location ? `${esc(p.location)} <span class="muted">· ${ago(p.locationAt)}</span>` : `<span class="muted">Unknown</span>`}</dd>
         ${p.phone ? `<dt>Phone</dt><dd class="mono">${esc(p.phone)}</dd>` : ""}
       </dl>
@@ -1251,9 +1474,10 @@ dialog::backdrop { background: var(--scrim); }
         <button class="btn sm" type="button" data-act="add-receipt" data-id="${id}">${ICON.cam}Add receipt</button>
         ${admin ? `<button class="btn sm primary" type="button" data-act="add-payment" data-id="${id}" ${b.owed > 0.004 ? "" : "disabled"}>${ICON.card}Record payment</button>` : ""}
       </div>` : ""}
+      <div class="sheet-foot"><button class="btn sm" type="button" data-act="statement" data-id="${id}">${ICON.doc}Statement</button></div>
       <h4 class="eyebrow">Hours · ${hrs(b.hAll)} all time</h4>
       ${shifts.length ? `<div class="tablebox"><table><thead><tr><th>Date</th><th>Job · location</th><th class="n">Hours</th><th class="n">Earned</th></tr></thead><tbody>
-        ${shifts.slice(0, 60).map((s) => `<tr><td>${fmtShort(s.date)}</td><td>${esc(s.job || "—")}${s.location ? `<span class="sub">${esc(s.location)}</span>` : ""}</td><td class="n">${hrs(s.hours)}</td><td class="n">${money((Number(s.hours) || 0) * (Number(s.rate) || 0))}</td></tr>`).join("")}
+        ${shifts.slice(0, 60).map((s) => `<tr><td>${fmtShort(s.date)}</td><td>${esc(s.job || "—")}${s.location ? `<span class="sub">${esc(s.location)}</span>` : ""}</td><td class="n">${hrs(s.hours)}${otSub(s)}</td><td class="n">${money(shiftPay(s).amount)}</td></tr>`).join("")}
       </tbody></table></div>` : `<p class="muted">No hours logged.</p>`}
       <h4 class="eyebrow">Receipts</h4>
       ${recs.length ? `<div class="tablebox"><table><thead><tr><th>Date</th><th>For</th><th class="n">Amount</th><th>Status</th></tr></thead><tbody>
@@ -1319,6 +1543,46 @@ dialog::backdrop { background: var(--scrim); }
     openSheet("#d-quick");
   }
 
+  // Person pay terms (admin form). Returns the terms, or an error message.
+  function personFormTerms() {
+    const v = (id) => $(id).value.trim(), n = (id) => parseFloat($(id).value);
+    const day = $("#pf-paytype").value === "day";
+    const rate = day && v("#pf-rate") === "" ? 0 : n("#pf-rate");
+    const otAfter = v("#pf-otafter") === "" ? 0 : n("#pf-otafter");
+    const otMult = v("#pf-otmult") === "" ? 1.5 : n("#pf-otmult");
+    if (!(rate >= 0)) return day ? "The hourly rate can't be negative." : "Enter an hourly rate. Use 0 for unpaid roles.";
+    if (!(otAfter >= 0 && otAfter < 24)) return "Overtime starts after 0 to 24 hours. Leave it empty for no overtime.";
+    if (otAfter && !(otMult >= 1 && otMult <= 5)) return "Overtime pays between 1× and 5× the hourly rate.";
+    const t = { payType: day ? "day" : "hourly", rate: round2(rate), dayRate: 0, halfDayRate: 0, halfDayUnder: 0, otAfter: round2(otAfter), otMult: otMult >= 1 && otMult <= 5 ? round2(otMult) : 1.5 };
+    if (!day) return t;
+    const dr = n("#pf-dayrate"), hr = v("#pf-halfrate") === "" ? 0 : n("#pf-halfrate"), hu = v("#pf-halfunder") === "" ? 0 : n("#pf-halfunder");
+    if (!(dr > 0)) return "Enter the day rate.";
+    if (hr || hu) {
+      if (!(hr > 0)) return "Enter the half-day rate, or clear the hours under it.";
+      if (!(hu > 0 && hu <= 24)) return "Enter how many hours count as a half day.";
+    }
+    if (otAfter && !(rate > 0)) return "Enter the hourly rate overtime is paid at.";
+    return { ...t, dayRate: round2(dr), halfDayRate: round2(hr), halfDayUnder: round2(hu) };
+  }
+  function fillPersonTerms(p) {
+    const t = payTerms(p);
+    $("#pf-paytype").value = t.payType;
+    $("#pf-dayrate").value = t.dayRate || "";
+    $("#pf-halfrate").value = t.halfDayRate || ""; $("#pf-halfunder").value = t.halfDayUnder || "";
+    $("#pf-otafter").value = t.otAfter || ""; $("#pf-otmult").value = p.otMult ? t.otMult : 1.5;
+    personTermsUI();
+  }
+  function personTermsUI() {
+    const day = $("#pf-paytype").value === "day";
+    $("#pf-day-wrap").hidden = $("#pf-half-wrap").hidden = !day;
+    $('label[for="pf-rate"]').textContent = day ? "Hourly rate for overtime" : "Hourly rate";
+    $("#pf-rate").placeholder = day ? "Only for overtime" : "";
+    const t = personFormTerms();
+    $("#pf-terms").textContent = typeof t === "string" ? "" : `Pays ${termsText(t)}. Each shift keeps the terms it was logged under.`;
+  }
+  $("#d-person form").addEventListener("input", personTermsUI);
+  $("#pf-paytype").addEventListener("change", personTermsUI);
+
   // Person (editors)
   let editingPerson = null;
   function openPerson(id) {
@@ -1327,20 +1591,24 @@ dialog::backdrop { background: var(--scrim); }
     const p = state.people.find((x) => x.id === id) || {};
     $("#pf-title").textContent = id ? `Edit ${p.name}` : "Add person";
     $("#pf-name").value = p.name || ""; $("#pf-role").value = p.role || "model"; $("#pf-rate").value = p.rate ?? "";
+    fillPersonTerms(p);
     $("#pf-spec").value = p.speciality || ""; $("#pf-loc").value = p.location || ""; $("#pf-phone").value = p.phone || "";
     $("#pf-del").hidden = !id; disarm($("#pf-del"), "Delete"); showErr($("#pf-err"), "");
     openSheet("#d-person"); $("#pf-name").focus();
   }
   $("#d-person form").addEventListener("submit", (e) => {
     e.preventDefault();
-    const err = $("#pf-err"), name = $("#pf-name").value.trim(), rate = parseFloat($("#pf-rate").value);
+    const err = $("#pf-err"), name = $("#pf-name").value.trim();
     if (!name) return showErr(err, "Enter their name.");
-    if (!(rate >= 0)) return showErr(err, "Enter an hourly rate. Use 0 for unpaid roles.");
+    const terms = personFormTerms();
+    if (typeof terms === "string") return showErr(err, terms);
     attempt(e.currentTarget, err, async () => {
       const prev = state.people.find((x) => x.id === editingPerson);
       const id = prev?.id || uid();
       const base = prev ? server.people.get(id) || merged("people").get(id) || {} : {};
-      await put("people", id, stamp({ ...base, name, role: $("#pf-role").value, rate: round2(rate), speciality: $("#pf-spec").value.trim(), phone: $("#pf-phone").value.trim() }));
+      // New terms only apply from now on: confirm the terms of this person's existing shifts first.
+      if (prev && !sameTerms(prev, terms)) await confirmShiftTerms(state.shifts.filter((s) => s.personId === id));
+      await put("people", id, stamp({ ...base, name, role: $("#pf-role").value, ...terms, speciality: $("#pf-spec").value.trim(), phone: $("#pf-phone").value.trim() }));
       const location = $("#pf-loc").value.trim();
       if ((prev?.location || "") !== location) await put("locations", id, { location, locationAt: Date.now(), by: myId });
       $("#d-person").close(); toast(prev ? "Saved" : `${name} added to the board`);
@@ -1350,7 +1618,7 @@ dialog::backdrop { background: var(--scrim); }
     const id = editingPerson;
     const related = ["shifts", "payments", "receipts"].flatMap((c) => state[c].filter((r) => r.personId === id).map((r) => [c, r]));
     armed(e.currentTarget, related.length ? `Delete with ${related.length} records?` : "Tap again to delete", async () => {
-      for (const [c, r] of related) { await put(c, r.id, null); if (c === "receipts") { await put("reimbursed", r.id, null); if (r.assetId && assets) assets.delete(r.assetId).catch(() => {}); } }
+      for (const [c, r] of related) { await put(c, r.id, null); if (c === "shifts" && state.payterms.has(r.id)) await put("payterms", r.id, null); if (c === "receipts") { await put("reimbursed", r.id, null); if (r.assetId && assets) assets.delete(r.assetId).catch(() => {}); } }
       await put("locations", id, null); await put("people", id, null);
       $("#d-person").close(); toast("Deleted");
     });
@@ -1388,9 +1656,21 @@ dialog::backdrop { background: var(--scrim); }
     }
     shiftCalc();
   }
+  // The pay terms this shift is logged under. The rate box edits the main rate of those terms
+  // (hourly rate, or day rate); overtime and half-day rules come with the person.
+  let sfTerms = payTerms();
+  function setShiftTerms(t) {
+    sfTerms = t;
+    $('label[for="sf-rate"]').textContent = t.payType === "day" ? "Day rate" : "Rate per hour";
+    $("#sf-rate").value = t.payType === "day" ? t.dayRate : t.rate;
+  }
+  function shiftFormTerms() {
+    const r = round2(parseFloat($("#sf-rate").value) || 0);
+    return sfTerms.payType === "day" ? { ...sfTerms, dayRate: r } : { ...sfTerms, rate: r };
+  }
   function shiftCalc() {
     const h = parseFloat($("#sf-hours").value) || 0, r = parseFloat($("#sf-rate").value) || 0, el = $("#sf-calc");
-    el.hidden = !(h && r); el.textContent = `${hrs(h)} × ${money(r)} = ${money(h * r)}`;
+    el.hidden = !(h && r); el.textContent = payExplain(h, shiftFormTerms());
   }
   function openShift(personId, shiftId) {
     if (needPeople()) return;
@@ -1400,7 +1680,7 @@ dialog::backdrop { background: var(--scrim); }
     const p = state.people.find((x) => x.id === $("#sf-person").value);
     $("#sf-title").textContent = shiftId ? "Edit hours" : "Log hours";
     $("#sf-date").value = s.date || isoDay(); $("#sf-start").value = s.start || ""; $("#sf-end").value = s.end || "";
-    $("#sf-hours").value = s.hours ?? ""; $("#sf-rate").value = s.rate ?? p?.rate ?? "";
+    $("#sf-hours").value = s.hours ?? ""; setShiftTerms(shiftId ? shiftTerms(s) : payTerms(p));
     $("#sf-rate").readOnly = !admin; // contributors use the agreed rate
     $("#sf-job").value = s.job || ""; $("#sf-loc").value = shiftId ? s.location || "" : p?.location || "";
     $("#sf-del").hidden = !shiftId; disarm($("#sf-del"), "Delete"); showErr($("#sf-err"), ""); shiftCalc();
@@ -1410,7 +1690,7 @@ dialog::backdrop { background: var(--scrim); }
   $("#sf-person").addEventListener("change", () => {
     if (editingShift) return;
     const p = state.people.find((x) => x.id === $("#sf-person").value);
-    if (p) { $("#sf-rate").value = p.rate ?? ""; $("#sf-loc").value = p.location || ""; }
+    if (p) { setShiftTerms(payTerms(p)); $("#sf-loc").value = p.location || ""; }
     shiftCalc();
   });
   $("#sf-start").addEventListener("change", calcHours);
@@ -1422,18 +1702,21 @@ dialog::backdrop { background: var(--scrim); }
     const err = $("#sf-err"), hours = parseFloat($("#sf-hours").value), rate = parseFloat($("#sf-rate").value), date = $("#sf-date").value;
     if (!date) return showErr(err, "Pick the date of the job.");
     if (!(hours > 0) || hours > 24) return showErr(err, "Enter between 0.25 and 24 hours, or fill in call and wrap.");
-    if (!(rate >= 0)) return showErr(err, "Enter the hourly rate.");
+    if (!(rate >= 0)) return showErr(err, sfTerms.payType === "day" ? "Enter the day rate." : "Enter the hourly rate.");
     attempt(e.currentTarget, err, async () => {
       const prev = state.shifts.find((x) => x.id === editingShift);
       const personId = $("#sf-person").value, location = $("#sf-loc").value.trim();
-      await put("shifts", prev?.id || uid(), stamp({ ...(prev || {}), personId, date, hours: round2(hours), rate: round2(rate), start: $("#sf-start").value, end: $("#sf-end").value, job: $("#sf-job").value.trim(), location, jobId: $("#sf-jobid").value || "" }));
+      const id = prev?.id || uid(), terms = shiftFormTerms(), person = state.people.find((x) => x.id === personId);
+      // Editors confirm terms that differ from the person's current ones (or were confirmed before).
+      if (admin && (state.payterms.has(id) || !person || !sameTerms(terms, person))) await put("payterms", id, { ...terms, by: myId });
+      await put("shifts", id, stamp({ ...(prev || {}), personId, date, hours: round2(hours), ...terms, start: $("#sf-start").value, end: $("#sf-end").value, job: $("#sf-job").value.trim(), location, jobId: $("#sf-jobid").value || "" }));
       const p = state.people.find((x) => x.id === personId);
       if (!prev && date === isoDay() && location && p && (p.location || "") !== location) await put("locations", personId, { location, locationAt: Date.now(), by: myId });
       $("#d-shift").close();
       toast(prev ? "Hours updated" : `${hrs(hours)} logged for ${personName(personId)}${online ? "" : " · saved on this device"}`);
     });
   });
-  $("#sf-del").addEventListener("click", (e) => armed(e.currentTarget, "Tap again to delete", async () => { await put("shifts", editingShift, null); $("#d-shift").close(); toast("Entry deleted"); }));
+  $("#sf-del").addEventListener("click", (e) => armed(e.currentTarget, "Tap again to delete", async () => { if (admin && state.payterms.has(editingShift)) await put("payterms", editingShift, null); await put("shifts", editingShift, null); $("#d-shift").close(); toast("Entry deleted"); }));
 
   // Receipts
   let picked = null, pickedUrl = null;
@@ -1565,6 +1848,191 @@ dialog::backdrop { background: var(--scrim); }
     });
   });
 
+  // ---------- Statements ----------
+  // A statement is a running account for one person over a period:
+  // opening balance + work + receipts added − wages paid − receipts paid back = closing balance.
+  // Over all time it equals the board's "owed" figure (earned − wages + receipts not yet reimbursed).
+  const agencyName = () => String(state.settings.agencyName || "").trim() || "Talent & Crew";
+  const byDateAsc = (a, b) => (a.date || "").localeCompare(b.date || "") || (a.createdAt || 0) - (b.createdAt || 0);
+  function statementData(pid, from, to) {
+    const inP = (d) => d >= from && d <= to, before = (d) => d < from;
+    const person = state.people.find((p) => p.id === pid) || { name: personName(pid) };
+    const shifts = state.shifts.filter((s) => s.personId === pid && countsForPay(s));
+    const recs = state.receipts.filter((r) => r.personId === pid);
+    const pays = state.payments.filter((p) => p.personId === pid);
+    const paidBackOn = (r) => r.reimbursedAt || r.date || "";
+    const back = recs.filter((r) => r.status === "reimbursed");
+    let opening = 0;
+    for (const s of shifts) if (before(s.date || "")) opening += shiftPay(s).amount;
+    for (const r of recs) if (before(r.date || "")) opening += Number(r.amount) || 0;
+    for (const p of pays) if (before(p.date || "")) opening -= Number(p.amount) || 0;
+    for (const r of back) if (before(paidBackOn(r))) opening -= Number(r.amount) || 0;
+    const work = shifts.filter((s) => inP(s.date || "")).sort(byDateAsc).map((s) => ({ s, pay: shiftPay(s), terms: shiftTerms(s) }));
+    const added = recs.filter((r) => inP(r.date || "")).sort(byDateAsc);
+    const out = pays.filter((p) => inP(p.date || "")).sort(byDateAsc).map((p) => ({ date: p.date, p, wages: Number(p.amount) || 0, recs: [] }));
+    for (const r of back) {
+      if (!inP(paidBackOn(r))) continue;
+      const row = out.find((x) => (x.p?.receiptIds || []).includes(r.id));
+      if (row) row.recs.push(r); else out.push({ date: paidBackOn(r), r, wages: 0, recs: [r] });
+    }
+    out.sort(byDateAsc);
+    for (const o of out) o.back = o.recs.reduce((a, r) => a + (Number(r.amount) || 0), 0);
+    const sum = (xs, f) => xs.reduce((a, x) => a + f(x), 0);
+    const t = {
+      hours: sum(work, (w) => Number(w.s.hours) || 0), reg: sum(work, (w) => w.pay.regularHours), ot: sum(work, (w) => w.pay.overtimeHours),
+      earned: sum(work, (w) => w.pay.amount), recAdded: sum(added, (r) => Number(r.amount) || 0), wages: sum(out, (o) => o.wages), back: sum(out, (o) => o.back),
+    };
+    const closing = opening + t.earned + t.recAdded - t.wages - t.back;
+    return { pid, person, from, to, opening, closing, work, added, out, t };
+  }
+  const lastDay = (m) => { const [y, mo] = m.split("-").map(Number); return `${m}-${pad(new Date(y, mo, 0).getDate())}`; };
+  const monthName = (m) => new Date(m + "-01T12:00").toLocaleDateString(locale, { month: "long", year: "numeric" });
+  const stUI = { mode: "month", month: isoMonth(), from: "", to: "" };
+  function stPeriod() {
+    if (stUI.mode === "month") { const m = stUI.month || isoMonth(); return { from: m + "-01", to: lastDay(m), key: m, label: monthName(m) }; }
+    let from = stUI.from || isoMonth() + "-01", to = stUI.to || isoDay();
+    if (from > to) [from, to] = [to, from];
+    return { from, to, key: `${from}_${to}`, label: `${fmtDate(from)} – ${fmtDate(to)}` };
+  }
+  const sign = (n, s) => `<span class="stmt-sign">${s}</span>${money(n)}`;
+  function stmtDoc(st, label) {
+    const p = st.person, c = round2(st.closing), ag = esc(agencyName());
+    const due = c > 0.004 ? ["owed", `Owed to ${esc((p.name || "").split(" ")[0] || "you")}`] : c < -0.004 ? ["over", "Overpaid"] : ["paid", "Settled"];
+    const n = st.work.length;
+    const workRows = st.work.map((w) => `<tr><td>${fmtShort(w.s.date)}</td><td>${esc(w.s.job || "—")}${w.s.location ? `<span class="sub">${esc(w.s.location)}</span>` : ""}</td><td class="n">${hrs(w.s.hours)}${w.pay.overtimeHours ? `<span class="sub">${hrs(w.pay.overtimeHours)} OT</span>` : ""}</td><td class="basis">${esc(payExplain(w.s.hours, w.terms, false))}</td><td class="n">${money(w.pay.amount)}</td></tr>`).join("");
+    const recRows = st.added.map((r) => `<tr><td>${fmtShort(r.date)}</td><td>${esc(r.description || "Receipt")}</td><td>${r.status === "reimbursed" ? `Paid back${r.reimbursedAt ? " " + fmtShort(r.reimbursedAt) : ""}` : "To reimburse"}</td><td class="n">${money(r.amount)}</td></tr>`).join("");
+    const outRows = st.out.map((o) => `<tr><td>${fmtShort(o.date)}</td><td>${o.p ? `${esc(o.p.method || "Payment")}${o.p.note ? `<span class="sub">${esc(o.p.note)}</span>` : ""}` : `Receipt paid back<span class="sub">${esc(o.r.description || "Receipt")}</span>`}</td><td class="n">${o.wages ? money(o.wages) : "—"}</td><td class="n">${o.back ? money(o.back) : "—"}</td><td class="n">${money(o.wages + o.back)}</td></tr>`).join("");
+    const none = (t) => `<p class="stmt-none">${t}</p>`;
+    return `<article class="stmt">
+      <header class="stmt-top">
+        <div class="stmt-from"><b class="stmt-agency">${ag}</b><span class="stmt-kind">Statement of account</span></div>
+        <dl class="stmt-meta"><div><dt>Period</dt><dd>${esc(label)}</dd></div><div><dt>Issued</dt><dd>${fmtDate(isoDay())}</dd></div></dl>
+      </header>
+      <div class="stmt-band">
+        <div class="stmt-payee">
+          <span class="stmt-k">Prepared for</span>
+          <h2 class="stmt-name">${esc(p.name || "")}</h2>
+          <p>${p.role ? roleLabel(p.role) : ""}${p.speciality ? " · " + esc(p.speciality) : ""}</p>
+          ${p.id ? `<p class="stmt-terms">${esc(termsText(payTerms(p)))}</p>` : ""}
+        </div>
+        <div class="stmt-due ${due[0]}"><span class="stmt-k">${due[1]}</span><b>${money(c)}</b><span>Balance at ${fmtDate(st.to)}</span></div>
+      </div>
+      <div class="stmt-recon">
+        <div><span>Opening balance<em>at ${fmtDate(st.from)}</em></span><b>${money(st.opening)}</b></div>
+        <div><span>Work<em>${n} ${n === 1 ? "shift" : "shifts"} · ${hrs(st.t.hours)}${st.t.ot ? ` incl. ${hrs(st.t.ot)} overtime` : ""}</em></span><b>${sign(st.t.earned, "+")}</b></div>
+        <div><span>Receipts added<em>${st.added.length} ${st.added.length === 1 ? "receipt" : "receipts"}</em></span><b>${sign(st.t.recAdded, "+")}</b></div>
+        <div><span>Wages paid</span><b>${sign(st.t.wages, "−")}</b></div>
+        <div><span>Receipts paid back</span><b>${sign(st.t.back, "−")}</b></div>
+        <div class="total"><span>Closing balance<em>at ${fmtDate(st.to)}</em></span><b>${money(c)}</b></div>
+      </div>
+      <section class="stmt-sec"><h3>Work</h3>${n ? `<div class="stmt-scroll"><table>
+        <thead><tr><th>Date</th><th>Job · location</th><th class="n">Hours</th><th>Pay basis</th><th class="n">Amount</th></tr></thead>
+        <tbody>${workRows}</tbody>
+        <tfoot><tr><td colspan="2">${n} ${n === 1 ? "shift" : "shifts"}</td><td class="n">${hrs(st.t.hours)}</td><td></td><td class="n">${money(st.t.earned)}</td></tr></tfoot>
+      </table></div>` : none("No hours logged in this period.")}</section>
+      <section class="stmt-sec"><h3>Receipts added</h3>${st.added.length ? `<div class="stmt-scroll"><table>
+        <thead><tr><th>Date</th><th>For</th><th>Status</th><th class="n">Amount</th></tr></thead>
+        <tbody>${recRows}</tbody>
+        <tfoot><tr><td colspan="3">${st.added.length} ${st.added.length === 1 ? "receipt" : "receipts"}</td><td class="n">${money(st.t.recAdded)}</td></tr></tfoot>
+      </table></div>` : none("No receipts in this period.")}</section>
+      <section class="stmt-sec"><h3>Payments</h3>${st.out.length ? `<div class="stmt-scroll"><table>
+        <thead><tr><th>Date</th><th>Method · note</th><th class="n">Wages</th><th class="n">Receipts</th><th class="n">Total</th></tr></thead>
+        <tbody>${outRows}</tbody>
+        <tfoot><tr><td colspan="2">${st.out.length} ${st.out.length === 1 ? "payment" : "payments"}</td><td class="n">${money(st.t.wages)}</td><td class="n">${money(st.t.back)}</td><td class="n">${money(st.t.wages + st.t.back)}</td></tr></tfoot>
+      </table></div>` : none("No payments in this period.")}</section>
+      <footer class="stmt-foot"><span>Amounts in ${esc(state.settings.currency || "EUR")}. A positive balance is owed by ${ag} to ${esc(p.name || "the payee")}; a negative balance has been overpaid.</span></footer>
+    </article>`;
+  }
+  // The statement's own CSS rules, lifted from this page's stylesheet, so the downloaded file looks the same.
+  function docCss() {
+    const out = [];
+    for (const sh of document.styleSheets) {
+      let rules; try { rules = sh.cssRules; } catch { continue; }
+      for (const r of rules) {
+        if (r.selectorText === ":root" || (r.selectorText && r.selectorText.includes(".stmt"))) out.push(r.cssText);
+        else if (r.conditionText !== undefined && r.cssText.includes(".stmt") && !/prefers-color-scheme/.test(r.conditionText)) out.push(r.cssText);
+      }
+    }
+    return out.join("\n");
+  }
+  function statementFile(st, label) {
+    const title = `${agencyName()} · Statement · ${st.person.name || ""} · ${label}`;
+    return `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(title)}</title>
+<style>
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:#E8E8E4;color:#121316;font-family:"Instrument Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:14px;line-height:1.5;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+main{padding:32px 16px}
+${docCss()}
+:root{color-scheme:light}
+.stmt{max-width:820px;margin:0 auto}
+@media print{body{background:#fff}main{padding:0}}
+</style></head>
+<body><main>${stmtDoc(st, label)}</main></body></html>`;
+  }
+  function statementCsv(st, label) {
+    const name = st.person.name || "";
+    const rows = [["Statement of account", agencyName()], ["Prepared for", name], ["Period", label, st.from, st.to], ["Pay terms", st.person.id ? termsText(payTerms(st.person)) : ""], ["Issued", isoDay()], [],
+      ["Date", "Entry", "Details", "Hours", "Regular hours", "Overtime hours", "Pay basis", "In", "Out", "Balance"]];
+    let bal = st.opening;
+    rows.push([st.from, "Opening balance", "", "", "", "", "", "", "", round2(bal)]);
+    const lines = [
+      ...st.work.map((w) => ({ date: w.s.date, o: 0, row: ["Work", [w.s.job, w.s.location].filter(Boolean).join(" · "), w.s.hours, round2(w.pay.regularHours), round2(w.pay.overtimeHours), payExplain(w.s.hours, w.terms, false)], inn: w.pay.amount, out: 0 })),
+      ...st.added.map((r) => ({ date: r.date, o: 1, row: ["Receipt", r.description || "", "", "", "", ""], inn: Number(r.amount) || 0, out: 0 })),
+      ...st.out.map((x) => ({ date: x.date, o: 2, row: [x.p ? "Payment" : "Receipt paid back", x.p ? [x.p.method, x.p.note, x.back ? `incl. ${x.recs.length} receipt${x.recs.length === 1 ? "" : "s"}` : ""].filter(Boolean).join(" · ") : x.r.description || "", "", "", "", ""], inn: 0, out: x.wages + x.back })),
+    ].sort((a, b) => (a.date || "").localeCompare(b.date || "") || a.o - b.o);
+    for (const l of lines) { bal += l.inn - l.out; rows.push([l.date, ...l.row, l.inn ? round2(l.inn) : "", l.out ? round2(l.out) : "", round2(bal)]); }
+    rows.push([st.to, "Closing balance", "", round2(st.t.hours), round2(st.t.reg), round2(st.t.ot), "", round2(st.t.earned + st.t.recAdded), round2(st.t.wages + st.t.back), round2(st.closing)]);
+    rows.push([], ["Earned", round2(st.t.earned)], ["Receipts added", round2(st.t.recAdded)], ["Wages paid", round2(st.t.wages)], ["Receipts paid back", round2(st.t.back)]);
+    return rows;
+  }
+  // One row per person for a period: what an accountant needs for the month.
+  function periodSummaryCsv(per) {
+    const rows = [["Person", "Role", "Pay terms", "Shifts", "Hours", "Regular hours", "Overtime hours", "Earned", "Receipts added", "Wages paid", "Receipts paid back", "Total paid", "Opening balance", "Closing balance"]];
+    const tot = Array(10).fill(0);
+    for (const p of state.people.slice().sort(byName)) {
+      const st = statementData(p.id, per.from, per.to);
+      const nums = [st.work.length, st.t.hours, st.t.reg, st.t.ot, st.t.earned, st.t.recAdded, st.t.wages, st.t.back, st.t.wages + st.t.back, st.closing];
+      nums.forEach((v, i) => (tot[i] += v));
+      rows.push([p.name, roleLabel(p.role), termsText(payTerms(p)), ...nums.slice(0, 4).map(round2), ...nums.slice(4, 9).map(round2), round2(st.opening), round2(st.closing)]);
+    }
+    rows.push(["Total", "", "", ...tot.slice(0, 4).map(round2), ...tot.slice(4, 9).map(round2), "", round2(tot[9])]);
+    return rows;
+  }
+  const slug = (s) => String(s || "").normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "").toLowerCase() || "person";
+  let stCur = null;
+  function renderStatement() {
+    const sel = $("#st-person");
+    if (!state.people.some((p) => p.id === sel.value)) { personOptions(sel, sel.value); if (!sel.value) { $("#d-statement").close(); return; } }
+    const per = stPeriod();
+    $$("#st-mode button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === stUI.mode)));
+    $("#st-month").hidden = stUI.mode !== "month";
+    $("#st-range").hidden = stUI.mode === "month";
+    const st = statementData(sel.value, per.from, per.to);
+    stCur = { st, per };
+    $("#st-doc").innerHTML = stmtDoc(st, per.label);
+  }
+  function openStatement(pid) {
+    if (needPeople()) return;
+    personOptions($("#st-person"), pid || $("#st-person").value || ui.pPerson || state.people.slice().sort(byName)[0]?.id);
+    $("#st-month").value = stUI.month;
+    if (!stUI.from) { stUI.from = isoMonth() + "-01"; stUI.to = isoDay(); }
+    $("#st-from").value = stUI.from; $("#st-to").value = stUI.to;
+    renderStatement();
+    openSheet("#d-statement");
+    $("#d-statement .sheet-body").scrollTop = 0;
+  }
+  $("#st-person").addEventListener("change", renderStatement);
+  $("#st-mode").addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; stUI.mode = b.dataset.mode; renderStatement(); });
+  $("#st-month").addEventListener("change", (e) => { if (e.target.value) { stUI.month = e.target.value; renderStatement(); } });
+  $("#st-from").addEventListener("change", (e) => { stUI.from = e.target.value; renderStatement(); });
+  $("#st-to").addEventListener("change", (e) => { stUI.to = e.target.value; renderStatement(); });
+  const csvBlob = (rows) => new Blob(["\ufeff" + rows.map((r) => r.map(cell).join(",")).join("\r\n")], { type: "text/csv" });
+  async function saveDl(filename, data) { if (!downloads) return; try { await downloads.save({ filename, data }); } catch { /* viewer declined */ } }
+  $("#st-html").addEventListener("click", () => { const { st, per } = stCur; saveDl(`statement-${slug(st.person.name)}-${per.key}.html`, new Blob([statementFile(st, per.label)], { type: "text/html" })); });
+  $("#st-csv").addEventListener("click", () => { const { st, per } = stCur; saveDl(`statement-${slug(st.person.name)}-${per.key}.csv`, csvBlob(statementCsv(st, per.label))); });
+  $("#st-all").addEventListener("click", () => { const per = stPeriod(); saveDl(`summary-${per.key}.csv`, csvBlob(periodSummaryCsv(per))); });
+
   // ---------- Clicks ----------
   document.addEventListener("click", (e) => {
     const t = e.target.closest("[data-act]"); if (!t || t.disabled) return;
@@ -1581,6 +2049,7 @@ dialog::backdrop { background: var(--scrim); }
       case "add-payment": return openPay(id);
       case "goto-hours": location.hash = "hours"; return;
       case "detail": detailId = id; renderDetail(id); return openSheet("#d-detail");
+      case "statement": return openStatement(id);
       case "sync-now": online = true; return flush();
       case "del-payment": return armed(t, "Confirm", async () => {
         const p = state.payments.find((x) => x.id === id);
@@ -1613,7 +2082,7 @@ dialog::backdrop { background: var(--scrim); }
   $$("[data-export]").forEach((btn) => btn.addEventListener("click", async () => {
     if (!downloads) return;
     const kind = btn.dataset.export; let rows, name;
-    if (kind === "hours") { name = `hours-${ui.hMonth || "all"}.csv`; rows = [["Date", "Person", "Role", "Job", "Location", "Call", "Wrap", "Hours", "Rate", "Earned"], ...shiftsShown().map((s) => { const p = state.people.find((x) => x.id === s.personId); return [s.date, p?.name, roleLabel(p?.role), s.job, s.location, s.start, s.end, s.hours, s.rate, round2(s.hours * s.rate)]; })]; }
+    if (kind === "hours") { name = `hours-${ui.hMonth || "all"}.csv`; rows = [["Date", "Person", "Role", "Job", "Location", "Call", "Wrap", "Hours", "Rate", "Earned", "Pay type", "Day rate", "Regular hours", "Overtime hours", "Overtime ×", "Pay basis"], ...shiftsShown().map((s) => { const p = state.people.find((x) => x.id === s.personId), t = shiftTerms(s), pay = shiftPay(s); return [s.date, p?.name, roleLabel(p?.role), s.job, s.location, s.start, s.end, s.hours, t.rate, round2(pay.amount), t.payType, t.dayRate || "", round2(pay.regularHours), round2(pay.overtimeHours), t.otAfter ? t.otMult : "", payExplain(s.hours, t, false)]; })]; }
     else if (kind === "receipts") { name = `receipts-${isoDay()}.csv`; rows = [["Date", "Person", "Description", "Amount", "Status", "Reimbursed on"], ...receiptsShown().map((r) => [r.date, personName(r.personId), r.description, r.amount, r.status === "reimbursed" ? "Reimbursed" : "To reimburse", r.reimbursedAt || ""])]; }
     else { name = `payments-${isoDay()}.csv`; rows = [["Date", "Person", "Method", "Note", "Wages", "Receipts", "Total"], ...state.payments.filter((p) => !ui.pPerson || p.personId === ui.pPerson).sort((a, b) => (b.date || "").localeCompare(a.date || "")).map((p) => [p.date, personName(p.personId), p.method, p.note, p.amount, p.receiptsAmount || 0, round2((p.amount || 0) + (p.receiptsAmount || 0))])]; }
     try { await downloads.save({ filename: name, data: new Blob(["﻿" + rows.map((r) => r.map(cell).join(",")).join("\r\n")], { type: "text/csv" }) }); } catch { /* viewer declined */ }
@@ -1637,7 +2106,7 @@ dialog::backdrop { background: var(--scrim); }
   const jobRange = (j) => (jobEnd(j) > j.date ? `${fmtShort(j.date)} – ${fmtShort(jobEnd(j))}` : fmtShort(j.date));
   const invOf = (j) => (INV[j.invoiceStatus] ? j.invoiceStatus : "not invoiced");
   const crewOf = (j) => (j.people || []).filter((id) => state.people.some((p) => p.id === id));
-  const shiftCost = (s) => (Number(s.hours) || 0) * (Number(s.rate) || 0); // what the person earns for this shift
+  const shiftCost = (s) => shiftPay(s).amount; // what the person earns for this shift (rate type, overtime)
   const byStart = (a, b) => (a.date || "").localeCompare(b.date || "") || (a.call || "").localeCompare(b.call || "");
 
   // Billed to the client, what the job cost (wages + linked receipts), and the margin.
@@ -1991,6 +2460,7 @@ dialog::backdrop { background: var(--scrim); }
         if (!snap.metadata.fromCache) got.add(c);
         if (got.size === SRC.length) { clearTimeout(timer); if (!loaded || stale) bannerMsg(""); loaded = true; online = true; }
         rebuild(); render();
+        freezeOldShifts();
       }, (e) => { clearTimeout(timer); loaded = true; bannerMsg(e?.code === "revoked" ? "Your access to this ledger changed. Reload to continue." : "Lost the connection to the ledger. Reload the page.", true); render(); });
     }
     if (pendingCount()) flushSoon(1500);

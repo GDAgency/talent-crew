@@ -164,6 +164,32 @@ function noteFail(ip) {
 function validUsername(u) { return /^[a-zA-Z0-9._@-]{3,40}$/.test(u); }
 function validPassword(p) { return typeof p === "string" && p.length >= 8 && p.length <= 200; }
 
+// ---------- Pay terms ----------
+// A shift carries a snapshot of the pay terms it was logged under, so later rate
+// changes don't rewrite history. Staff can't choose those terms: a staff edit keeps
+// the shift's existing snapshot (same person), otherwise it takes the person's
+// current terms. Mirrors payTerms() in the app; missing fields = hourly, no overtime.
+const PAY_KEYS = ["payType", "rate", "dayRate", "halfDayRate", "halfDayUnder", "otAfter", "otMult"];
+const posNum = (v) => { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : 0; };
+function payTermsOf(x) {
+  const day = x.payType === "day";
+  return {
+    payType: day ? "day" : "hourly", rate: Number(x.rate) || 0,
+    dayRate: day ? posNum(x.dayRate) : 0, halfDayRate: day ? posNum(x.halfDayRate) : 0, halfDayUnder: day ? posNum(x.halfDayUnder) : 0,
+    otAfter: posNum(x.otAfter), otMult: posNum(x.otMult) || 1,
+  };
+}
+function forceShiftTerms(prev, data) {
+  if (prev && !prev.deleted && prev.personId === data.personId) {
+    for (const k of PAY_KEYS) { if (k in prev) data[k] = prev[k]; else delete data[k]; }
+    return true;
+  }
+  const rec = q.getRec.get("people", String(data.personId ?? ""));
+  if (!rec || rec.deleted) return false;
+  Object.assign(data, payTermsOf(JSON.parse(rec.data)));
+  return true;
+}
+
 // ---------- Sync ----------
 // Jobs (bookings) are admin-only to write: applyChange's staff branch denies any
 // collection it doesn't list. Staff can read jobs, but not the client billing on them.
@@ -200,6 +226,7 @@ function applyChange(user, ch) {
         data.status = prev?.status || "pending";
         data.reimbursedAt = prev?.reimbursedAt ?? null;
       }
+      if (ch.c === "shifts" && !data.deleted && !forceShiftTerms(prev, data)) return { result: "denied", existing };
     } else {
       return { result: "denied", existing };
     }

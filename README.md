@@ -15,15 +15,18 @@ It's one web address that works two ways:
 | Photograph and add receipts | ✓ | ✓ |
 | Update anyone's location | ✓ | ✓ |
 | Edit or delete their own entries | ✓ | ✓ |
-| Add people, set hourly rates | | ✓ |
+| Add people, set pay terms (hourly or day rate, half day, overtime) | | ✓ |
 | Record payments, mark receipts reimbursed | | ✓ |
 | See jobs and log hours from a booking | ✓ | ✓ |
 | Book jobs, client fees and rates, invoice status, margins | | ✓ |
+| View and download statements (CSV, printable HTML) | ✓ | ✓ |
 | Create logins, reset passwords | | ✓ |
 
 The server checks these rules itself, so a staff account can't change rates or payments, even from an old or modified copy of the app.
 
-**Amount owed** = hours × rate − wages paid + receipts not yet reimbursed.
+**Amount owed** = pay for the hours worked − wages paid + receipts not yet reimbursed. Pay is hours × hourly rate, or a day rate per shift (optionally a half-day rate for short shifts), plus any overtime past a set number of hours in one shift at a multiplier of the hourly rate. Each shift keeps the terms it was logged under, so changing a rate never rewrites past pay.
+
+**Statements**: from a person's page or Payments → Statements, pick a month or dates to see the opening balance, each shift with its pay, receipts, payments and the closing balance. Download it as CSV or as a printable HTML file, or print it (A4). "Everyone · CSV" gives one row per person for the period, for the accountant.
 
 ## Run it on this computer
 

@@ -19,7 +19,7 @@ const HOST = process.env.HOST || "0.0.0.0";
 const SESSION_DAYS = 90;
 const MAX_PHOTO_BYTES = 15 * 1024 * 1024;
 const PHOTO_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "application/pdf"]);
-const COLLECTIONS = new Set(["people", "shifts", "payments", "receipts", "settings"]);
+const COLLECTIONS = new Set(["people", "shifts", "payments", "receipts", "settings", "jobs"]);
 const ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 
 fs.mkdirSync(PHOTO_DIR, { recursive: true });
@@ -165,6 +165,16 @@ function validUsername(u) { return /^[a-zA-Z0-9._@-]{3,40}$/.test(u); }
 function validPassword(p) { return typeof p === "string" && p.length >= 8 && p.length <= 200; }
 
 // ---------- Sync ----------
+// Jobs (bookings) are admin-only to write: applyChange's staff branch denies any
+// collection it doesn't list. Staff can read jobs, but not the client billing on them.
+const JOB_MONEY_FIELDS = ["billing", "fee", "clientRate", "invoiceStatus"];
+function redactFor(user, c, data) {
+  if (c !== "jobs" || user.role === "admin" || !data) return data;
+  const out = { ...data };
+  for (const k of JOB_MONEY_FIELDS) delete out[k];
+  return out;
+}
+
 // Applies one client change. Last writer wins by updatedAt. Staff accounts may
 // log hours, add receipts and update anyone's location; everything that moves
 // money (people, rates, payments, reimbursements, settings) is admin-only.
@@ -222,7 +232,7 @@ function handleSync(user, body) {
       if (r.result === "ok") continue;
       if (r.result === "denied" || r.result === "invalid") denied++;
       // Tell the client what the server really holds so it can undo its copy.
-      if (r.existing) fixes.push({ c: r.existing.c, id: r.existing.id, data: JSON.parse(r.existing.data) });
+      if (r.existing) fixes.push({ c: r.existing.c, id: r.existing.id, data: redactFor(user, r.existing.c, JSON.parse(r.existing.data)) });
       else if (ch && COLLECTIONS.has(ch.c) && ID_RE.test(String(ch.id))) fixes.push({ c: ch.c, id: ch.id, data: null });
     }
     db.exec("COMMIT");
@@ -235,7 +245,7 @@ function handleSync(user, body) {
   const more = rows.length > LIMIT;
   const page = rows.slice(0, LIMIT);
   const rev = more ? page[page.length - 1].rev : q.curRev.get().value;
-  return { rev, more, denied, records: page.map((r) => ({ c: r.c, id: r.id, data: JSON.parse(r.data) })), fixes };
+  return { rev, more, denied, records: page.map((r) => ({ c: r.c, id: r.id, data: redactFor(user, r.c, JSON.parse(r.data)) })), fixes };
 }
 
 // ---------- Photos ----------

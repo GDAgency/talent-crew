@@ -17,6 +17,8 @@ It's one web address that works two ways:
 | Edit or delete their own entries | ✓ | ✓ |
 | Add people, set hourly rates | | ✓ |
 | Record payments, mark receipts reimbursed | | ✓ |
+| See jobs and log hours from a booking | ✓ | ✓ |
+| Book jobs, client fees and rates, invoice status, margins | | ✓ |
 | Create logins, reset passwords | | ✓ |
 
 The server checks these rules itself, so a staff account can't change rates or payments, even from an old or modified copy of the app.

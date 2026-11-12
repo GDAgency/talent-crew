@@ -74,8 +74,8 @@
   const meta = { get: async (k) => (await idb.get("meta", k))?.v, set: (k, v) => idb.put("meta", { k, v }) };
 
   // ---------- State ----------
-  const COLLS = ["people", "shifts", "payments", "receipts"];
-  const state = { people: [], shifts: [], payments: [], receipts: [], settings: { currency: "EUR" } };
+  const COLLS = ["people", "shifts", "payments", "receipts", "jobs"];
+  const state = { people: [], shifts: [], payments: [], receipts: [], jobs: [], settings: { currency: "EUR" } };
   const ui = { tab: "team", role: "all", q: "", hPerson: "", hMonth: isoMonth(), rStatus: "pending", rPerson: "", pPerson: "" };
   let me = null;
   let pendingKeys = new Set();        // records with changes not yet on the server
@@ -266,6 +266,7 @@
     if (ui.tab === "receipts") renderReceipts();
     if (ui.tab === "payments") renderPayments();
     if (ui.tab === "settings") renderSettings();
+    renderJobsHook(); // jobs view + open job sheet
     if ($("#d-detail").open && detailId) renderDetail(detailId);
     paintSync();
   }
@@ -287,7 +288,7 @@
       <div><span class="eyebrow">Owed to the team</span><span class="big ${owed > 0.004 ? "" : "zero"}">${money(owed)}</span><span class="note">${owedPeople ? `${owedPeople} ${owedPeople === 1 ? "person" : "people"} waiting to be paid` : "Everyone is paid up"}</span></div>
       <div><span class="eyebrow">Hours</span><span class="mid">${hrs(hMonth)}</span><span class="note">${money(earnedMonth)} in ${new Date().toLocaleDateString(locale, { month: "long" })}</span></div>
       <div><span class="eyebrow">Receipts</span><span class="mid">${money(recSum)}</span><span class="note">${recOpen.length} to reimburse</span></div>
-      <div><span class="eyebrow">Checked in</span><span class="mid">${onJob}<span class="muted">/${state.people.length}</span></span><span class="note">today</span></div>`;
+      <div><span class="eyebrow">Checked in</span><span class="mid">${onJob}<span class="muted">/${state.people.length}</span></span><span class="note">today${bookedTodayNote()}</span></div>`;
 
     const el = $("#board");
     if (!state.people.length) {
@@ -318,6 +319,7 @@
             <div class="txt">${p.location ? `<div class="loc">${esc(p.location)}</div><div class="ago">Updated ${ago(p.locationAt)}</div>` : `<div class="loc unknown">Location unknown</div>`}</div>
             <button class="btn quiet sm" type="button" data-act="loc" data-id="${p.id}">Update</button>
           </div>
+          ${bookingLine(p.id)}
         </div>
         <div class="figs">
           <div><span class="k">This month</span><span class="v ${b.hMonth ? "" : "zero"}">${hrs(b.hMonth)}</span></div>
@@ -716,6 +718,7 @@
     $("#sf-loc").value = shiftId ? s.location || "" : p?.location || "";
     $("#sf-del").hidden = !shiftId; disarm($("#sf-del"), "Delete");
     showErr($("#sf-err"), ""); shiftCalc();
+    jobFillShift(s, shiftId); // booking select; pre-fills when logging from a job
     openSheet("#d-shift");
   }
   $("#sf-person").addEventListener("change", () => {
@@ -738,7 +741,7 @@
     attempt(e.currentTarget, err, async () => {
       const prev = state.shifts.find((x) => x.id === editingShift);
       const personId = $("#sf-person").value, location = $("#sf-loc").value.trim();
-      await save("shifts", { ...(prev || {}), personId, date, hours: round2(hours), rate: round2(rate), start: $("#sf-start").value, end: $("#sf-end").value, job: $("#sf-job").value.trim(), location });
+      await save("shifts", { ...(prev || {}), personId, date, hours: round2(hours), rate: round2(rate), start: $("#sf-start").value, end: $("#sf-end").value, job: $("#sf-job").value.trim(), location, jobId: $("#sf-jobid").value || "" });
       const p = state.people.find((x) => x.id === personId);
       if (!prev && date === isoDay() && location && p && (p.location || "") !== location) await save("people", { ...p, location, locationAt: Date.now() });
       $("#d-shift").close();
@@ -772,6 +775,7 @@
     setPicked(null);
     $("#rf-amount").value = ""; $("#rf-date").value = isoDay(); $("#rf-desc").value = "";
     showErr($("#rf-err"), "");
+    jobFillReceipt($("#rf-person").value); // optional job link
     openSheet("#d-receipt");
   }
   // Resize phone photos to a sharp 2000px JPEG: readable, a fraction of the size.
@@ -810,7 +814,7 @@
     attempt(e.currentTarget, err, async () => {
       const id = uid();
       if (picked) await idb.put("photos", { id, blob: picked, type: picked.type, uploaded: false, savedAt: Date.now() });
-      await save("receipts", { id, personId: $("#rf-person").value, amount: round2(amount), date, description: $("#rf-desc").value.trim(), status: "pending", hasPhoto: !!picked, photoType: picked?.type || null, photoUploaded: false });
+      await save("receipts", { id, personId: $("#rf-person").value, amount: round2(amount), date, description: $("#rf-desc").value.trim(), jobId: $("#rf-job").value || "", status: "pending", hasPhoto: !!picked, photoType: picked?.type || null, photoUploaded: false });
       $("#d-receipt").close(); setPicked(null);
       toast(`Receipt for ${money(amount)} saved${sync.online ? "" : " on this device"}`);
     });
@@ -830,6 +834,7 @@
         <dt>For</dt><dd>${esc(r.description || "—")}</dd>
         <dt>Paid by</dt><dd>${esc(personName(r.personId))}</dd>
         <dt>Date</dt><dd>${fmtDate(r.date)}</dd>
+        ${receiptJobRow(r)}
         <dt>Status</dt><dd>${r.status === "reimbursed" ? `<span class="pill paid">Reimbursed${r.reimbursedAt ? " · " + fmtDate(r.reimbursedAt) : ""}</span>` : `<span class="pill owed">To reimburse</span>`}</dd>
       </dl>
       <div class="err" id="vw-err" hidden></div>
@@ -991,8 +996,332 @@
       ...state.payments.filter((p) => !ui.pPerson || p.personId === ui.pPerson).sort((a, b) => (b.date || "").localeCompare(a.date || "")).map((p) => [p.date, personName(p.personId), p.method, p.note, p.amount, p.receiptsAmount || 0, round2((p.amount || 0) + (p.receiptsAmount || 0))])]);
   }));
 
+  // ---------- Jobs (bookings) & client billing ----------
+  // jobs/{id}: client, title, date, endDate (optional, multi-day), call, location, notes,
+  //   people[] (booked person ids), billing ("flat" | "hourly"), fee, clientRate,
+  //   invoiceStatus ("not invoiced" | "invoiced" | "paid").
+  // Shifts and receipts carry an optional jobId. Only admins write jobs; staff see them
+  // without the billing fields (the server strips those for staff).
+  const jui = { view: "list", q: "", pastOpen: false };
+  let jobOpenId = null, editingJob = null, shiftFromJob = null;
+  const CAL = `<svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 9.5h17M8 3v4M16 3v4"/></svg>`;
+  const INV = { "not invoiced": "Not invoiced", invoiced: "Invoiced", paid: "Paid" };
+  const jobEnd = (j) => (j.endDate && j.endDate > j.date ? j.endDate : j.date || "");
+  const jobOn = (j, day) => !!j.date && j.date <= day && day <= jobEnd(j);
+  const addDays = (iso, n) => { const [y, m, d] = iso.split("-").map(Number); return isoDay(new Date(y, m - 1, d + n)); };
+  const jobName = (j) => j.title || j.client || "Untitled job";
+  const jobLabel = (j) => [j.title, j.client].filter(Boolean).join(" · ") || "Untitled job";
+  const jobRange = (j) => (jobEnd(j) > j.date ? `${fmtShort(j.date)} – ${fmtShort(jobEnd(j))}` : fmtShort(j.date));
+  const invOf = (j) => (INV[j.invoiceStatus] ? j.invoiceStatus : "not invoiced");
+  const crewOf = (j) => (j.people || []).filter((id) => state.people.some((p) => p.id === id));
+  const shiftCost = (s) => (Number(s.hours) || 0) * (Number(s.rate) || 0); // what the person earns for this shift
+  const byStart = (a, b) => (a.date || "").localeCompare(b.date || "") || (a.call || "").localeCompare(b.call || "");
+
+  // Billed to the client, what the job cost (wages + linked receipts), and the margin.
+  function jobMoney(j) {
+    const shifts = state.shifts.filter((s) => s.jobId === j.id);
+    const recs = state.receipts.filter((r) => r.jobId === j.id);
+    const hours = shifts.reduce((a, s) => a + (Number(s.hours) || 0), 0);
+    const wages = shifts.reduce((a, s) => a + shiftCost(s), 0);
+    const exp = recs.reduce((a, r) => a + (Number(r.amount) || 0), 0);
+    const billed = j.billing === "hourly" ? hours * (Number(j.clientRate) || 0) : Number(j.fee) || 0;
+    return { shifts, recs, hours, wages: round2(wages), exp: round2(exp), billed: round2(billed), cost: round2(wages + exp), margin: round2(billed - wages - exp) };
+  }
+  // Billed amount; an hourly job with nothing logged yet shows its rate instead of 0.
+  const billedLabel = (j, mm) => (j.billing === "hourly" && !mm.hours ? `${money(j.clientRate)} / h` : money(mm.billed));
+  function invPill(j) {
+    const st = invOf(j);
+    if (st === "paid") return `<span class="pill paid">Paid</span>`;
+    if (st === "invoiced") return `<span class="pill inv">Invoiced</span>`;
+    return jobEnd(j) < isoDay() ? `<span class="pill owed">To invoice</span>` : `<span class="pill wait">Not invoiced</span>`;
+  }
+
+  // The board: a person's booking today, or their next one.
+  function nextBooking(pid) {
+    const today = isoDay();
+    return state.jobs.filter((j) => (j.people || []).includes(pid) && jobEnd(j) >= today).sort((a, b) => (jobOn(b, today) - jobOn(a, today)) || byStart(a, b))[0] || null;
+  }
+  function bookingLine(pid) {
+    const j = nextBooking(pid); if (!j) return "";
+    const today = isoDay(), on = jobOn(j, today);
+    const when = (on ? "Booked today" : j.date === addDays(today, 1) ? "Booked tomorrow" : `Next booking · ${fmtShort(j.date)}`) + (j.call ? ` · call ${esc(j.call)}` : "");
+    const what = [jobName(j), j.location].filter(Boolean).map(esc).join(", ");
+    return `<button class="booked ${on ? "on" : ""}" type="button" data-act="job-open" data-id="${j.id}">${CAL}<span class="txt"><span class="bk-when">${when}</span><span class="bk-what">${what}</span></span></button>`;
+  }
+  function bookedTodayNote() {
+    const today = isoDay(), ids = new Set();
+    for (const j of state.jobs) if (jobOn(j, today)) for (const id of crewOf(j)) ids.add(id);
+    return ids.size ? ` · ${ids.size} booked` : "";
+  }
+
+  function renderJobsHook() {
+    if (ui.tab === "jobs") renderJobs();
+    if ($("#d-job").open && jobOpenId) renderJob(jobOpenId);
+  }
+
+  const jobsMatching = () => {
+    const q = jui.q.trim().toLowerCase();
+    return q ? state.jobs.filter((j) => [j.client, j.title, j.location, ...crewOf(j).map(personName)].some((v) => (v || "").toLowerCase().includes(q))) : state.jobs.slice();
+  };
+
+  function renderJobs() {
+    const el = $("#jobs");
+    if (!isAdmin()) jui.view = "list";
+    $$("#job-seg button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.jv === jui.view)));
+    if (!state.jobs.length) {
+      el.innerHTML = isAdmin()
+        ? empty("No jobs booked yet", "Add a job with the client, date, call time and location, then book people on it. It shows on their card on the board, and hours can be logged straight from it.", "job-add", "Book the first job")
+        : empty("No jobs booked yet", "Jobs appear here once an admin books them.");
+      return;
+    }
+    if (jui.view === "clients") return renderClients(el);
+    const list = jobsMatching();
+    if (!list.length) { el.innerHTML = empty("No jobs match", "Try a different search."); return; }
+    const today = isoDay(), tmw = addDays(today, 1), week = addDays(today, 7);
+    const groups = [["Today", []], ["Tomorrow", []], ["This week", []], ["Later", []]], past = [];
+    for (const j of list.sort(byStart)) {
+      if (jobEnd(j) < today) past.push(j);
+      else if (jobOn(j, today)) groups[0][1].push(j);
+      else if (j.date === tmw) groups[1][1].push(j);
+      else if (j.date <= week) groups[2][1].push(j);
+      else groups[3][1].push(j);
+    }
+    past.reverse();
+    const up = groups.filter((g) => g[1].length);
+    el.innerHTML = (up.length ? up.map(([t, js]) => `<section class="jgroup"><h2 class="jgroup-h">${t}<b>${js.length}</b></h2><div class="jlist">${js.map(jobCard).join("")}</div></section>`).join("")
+      : `<p class="totals-line">Nothing booked from today on.</p>`)
+      + (past.length ? `<details class="jpast" ${jui.pastOpen || (jui.q && !up.length) ? "open" : ""}><summary class="jgroup-h">Past jobs<b>${past.length}</b></summary><div class="jlist">${past.map(jobCard).join("")}</div></details>` : "");
+  }
+
+  function jobCard(j) {
+    const today = isoDay(), on = jobOn(j, today), [y, m, d] = (j.date || "").split("-").map(Number);
+    const dt = new Date(y, (m || 1) - 1, d || 1), crew = crewOf(j);
+    const meta = [jobEnd(j) > j.date ? `Until ${fmtShort(jobEnd(j))}` : "", j.call ? `Call ${esc(j.call)}` : "", esc(j.location || "")].filter(Boolean).join(" · ");
+    const bill = isAdmin() ? `<span class="jmoney"><b>${billedLabel(j, jobMoney(j))}</b>${invPill(j)}</span>` : "";
+    return `<button class="jcard ${on ? "on" : ""} ${jobEnd(j) < today ? "past" : ""}" type="button" data-act="job-open" data-id="${j.id}">
+      <span class="jdate"><span>${dt.toLocaleDateString(locale, { weekday: "short" })}</span><b>${d || "?"}</b><span>${dt.toLocaleDateString(locale, { month: "short" })}</span></span>
+      <span class="jbody">
+        ${j.client && j.title ? `<span class="jclient">${esc(j.client)}</span>` : ""}
+        <span class="jtitle">${esc(jobName(j))}</span>
+        ${meta ? `<span class="jmeta">${meta}</span>` : ""}
+        <span class="jcrew">${crew.length ? crew.map((id) => `<span class="chip">${esc(personName(id))}</span>`).join("") : `<span class="muted">No one booked yet</span>`}${unsyncedTag("jobs", j.id)}</span>
+      </span>${bill}
+    </button>`;
+  }
+
+  function renderClients(el) {
+    const by = new Map();
+    let billed = 0, cost = 0, awaiting = 0, toInv = 0;
+    const today = isoDay();
+    for (const j of jobsMatching()) {
+      const k = (j.client || "").trim() || "No client", mm = jobMoney(j);
+      if (!by.has(k)) by.set(k, { name: k, jobs: [], billed: 0, cost: 0 });
+      const c = by.get(k); c.jobs.push([j, mm]); c.billed += mm.billed; c.cost += mm.cost;
+      billed += mm.billed; cost += mm.cost;
+      if (invOf(j) === "invoiced") awaiting += mm.billed;
+      if (invOf(j) === "not invoiced" && jobEnd(j) < today) toInv++;
+    }
+    if (!by.size) { el.innerHTML = empty("No clients match", "Try a different search."); return; }
+    const margin = round2(billed - cost), n = [...by.values()].reduce((a, c) => a + c.jobs.length, 0);
+    const pct = (mg, b) => (b > 0.004 ? `${Math.round((mg / b) * 100)}% of billed` : "");
+    el.innerHTML = `<div class="summary">
+        <div><span class="eyebrow">Margin</span><span class="big ${margin < -0.004 ? "neg" : "ink"}">${money(margin)}</span><span class="note">${pct(margin, billed) || "Nothing billed yet"}</span></div>
+        <div><span class="eyebrow">Billed</span><span class="mid">${money(billed)}</span><span class="note">${n} ${n === 1 ? "job" : "jobs"}</span></div>
+        <div><span class="eyebrow">Cost</span><span class="mid">${money(cost)}</span><span class="note">Wages and receipts</span></div>
+        <div><span class="eyebrow">Awaiting payment</span><span class="mid">${money(awaiting)}</span><span class="note">${toInv ? `${toInv} past ${toInv === 1 ? "job" : "jobs"} to invoice` : "Nothing left to invoice"}</span></div>
+      </div>
+      <div class="clients">${[...by.values()].sort((a, b) => b.billed - a.billed || a.name.localeCompare(b.name, locale)).map((c) => {
+        const mg = round2(c.billed - c.cost);
+        return `<article class="client">
+          <div class="client-head"><h3>${esc(c.name)}</h3><span>${c.jobs.length} ${c.jobs.length === 1 ? "job" : "jobs"}</span></div>
+          <div class="figs">
+            <div><span class="k">Billed</span><span class="v">${money(c.billed)}</span></div>
+            <div><span class="k">Cost</span><span class="v">${money(c.cost)}</span></div>
+            <div><span class="k">Margin</span><span class="v ${mg < -0.004 ? "neg" : ""}">${money(mg)}</span></div>
+          </div>
+          <div class="cjobs">${c.jobs.sort((a, b) => byStart(b[0], a[0])).map(([j, mm]) => `<button class="cj" type="button" data-act="job-open" data-id="${j.id}">
+            <span class="cj-t"><span class="cj-d">${fmtShort(j.date)}</span>${esc(j.title || "Untitled job")}</span>
+            <span class="cj-r"><span class="cj-m">${billedLabel(j, mm)}</span>${invPill(j)}</span>
+          </button>`).join("")}</div>
+        </article>`;
+      }).join("")}</div>`;
+  }
+
+  // Job sheet
+  function renderJob(id) {
+    const j = state.jobs.find((x) => x.id === id);
+    if (!j) { $("#d-job").close(); return; }
+    const mm = jobMoney(j), crew = crewOf(j), a = isAdmin();
+    const hoursBy = new Map();
+    for (const s of mm.shifts) hoursBy.set(s.personId, (hoursBy.get(s.personId) || 0) + (Number(s.hours) || 0));
+    $("#jd-title").textContent = jobName(j);
+    const st = invOf(j);
+    $("#jd-body").innerHTML = `
+      <dl class="kv">
+        <dt>Client</dt><dd>${esc(j.client || "—")}</dd>
+        <dt>When</dt><dd>${jobRange(j)}${jobOn(j, isoDay()) ? ` <span class="pill inv">Today</span>` : ""}</dd>
+        <dt>Call</dt><dd class="mono">${esc(j.call || "—")}</dd>
+        <dt>Location</dt><dd>${esc(j.location || "—")}</dd>
+        ${j.notes ? `<dt>Notes</dt><dd class="pre">${esc(j.notes)}</dd>` : ""}
+      </dl>
+      ${a ? `<div class="detail-figs jfigs">
+        <div><span class="eyebrow">Billed to client</span><span class="v">${money(mm.billed)}</span><span class="sub">${j.billing === "hourly" ? `${hrs(mm.hours)} × ${money(j.clientRate)}` : "Flat fee"}</span></div>
+        <div><span class="eyebrow">Cost</span><span class="v">${money(mm.cost)}</span><span class="sub">Wages ${money(mm.wages)} · receipts ${money(mm.exp)}</span></div>
+        <div><span class="eyebrow">Margin</span><span class="v ${mm.margin < -0.004 ? "neg" : "pos"}">${money(mm.margin)}</span><span class="sub">${mm.billed > 0.004 ? `${Math.round((mm.margin / mm.billed) * 100)}% of billed` : "Nothing billed yet"}</span></div>
+      </div>
+      <div class="jinv"><span class="eyebrow">Invoice</span><div class="seg" role="group" aria-label="Invoice status">${Object.entries(INV).map(([v, l]) => `<button type="button" data-act="job-inv" data-id="${j.id}" data-v="${v}" aria-pressed="${st === v}">${l}</button>`).join("")}</div></div>` : ""}
+      <h4 class="eyebrow">Booked · ${crew.length}</h4>
+      ${crew.length ? `<div class="crew">${crew.map((pid) => {
+        const p = state.people.find((x) => x.id === pid), h = hoursBy.get(pid) || 0;
+        return `<div class="crew-row"><div class="who"><button class="comp-name" type="button" data-act="detail" data-id="${pid}">${esc(p.name)}</button><span>${roleLabel(p.role)} · ${h ? hrs(h) + " logged" : "no hours logged"}</span></div>
+          <button class="btn sm" type="button" data-act="job-log" data-id="${j.id}" data-person="${pid}">${ICON.clock}Log hours</button></div>`;
+      }).join("")}</div>` : `<p class="muted">No one booked yet.${a ? " Edit the job to book people." : ""}</p>`}
+      <h4 class="eyebrow">Hours on this job · ${hrs(mm.hours)}</h4>
+      ${mm.shifts.length ? `<div class="tablebox"><table><thead><tr><th>Date</th><th>Person</th><th class="n">Call–wrap</th><th class="n">Hours</th><th class="n">Earned</th></tr></thead><tbody>
+        ${mm.shifts.sort((x, y) => (y.date || "").localeCompare(x.date || "")).map((s) => `<tr><td>${fmtShort(s.date)}${unsyncedTag("shifts", s.id) ? `<span class="sub">${unsyncedTag("shifts", s.id)}</span>` : ""}</td><td class="who">${esc(personName(s.personId))}</td><td class="n">${s.start && s.end ? `${esc(s.start)}–${esc(s.end)}` : `<span class="muted">—</span>`}</td><td class="n">${hrs(s.hours)}</td><td class="n">${money(shiftCost(s))}</td></tr>`).join("")}
+      </tbody></table></div>` : `<p class="muted">No hours logged on this job yet.</p>`}
+      ${mm.recs.length ? `<h4 class="eyebrow">Receipts on this job · ${money(mm.exp)}</h4>
+      <div class="tablebox"><table><thead><tr><th>Date</th><th>For</th><th>Paid by</th><th class="n">Amount</th></tr></thead><tbody>
+        ${mm.recs.map((r) => `<tr><td>${fmtShort(r.date)}</td><td><button class="btn quiet sm" type="button" data-act="view-receipt" data-id="${r.id}">${esc(r.description || "Receipt")}</button></td><td>${esc(personName(r.personId))}</td><td class="n">${money(r.amount)}</td></tr>`).join("")}
+      </tbody></table></div>` : ""}
+      ${a ? `<div class="sheet-foot"><button class="btn" type="button" data-act="job-edit" data-id="${j.id}">Edit job</button></div>` : ""}`;
+  }
+
+  // Job form (admins)
+  function openJob(id) {
+    if (!isAdmin()) return;
+    editingJob = id || null;
+    const j = state.jobs.find((x) => x.id === id) || {};
+    $("#jf-title").textContent = id ? "Edit job" : "New job";
+    $("#jf-client").value = j.client || ""; $("#jf-name").value = j.title || "";
+    $("#jf-date").value = j.date || isoDay(); $("#jf-end").value = j.endDate || ""; $("#jf-call").value = j.call || "";
+    $("#jf-loc").value = j.location || ""; $("#jf-notes").value = j.notes || "";
+    $("#jf-billing").value = j.billing === "hourly" ? "hourly" : "flat";
+    const amt = j.billing === "hourly" ? j.clientRate : j.fee;
+    $("#jf-amount").value = amt ? amt : "";
+    $("#jf-inv").value = invOf(j);
+    $("#jf-clients").innerHTML = [...new Set(state.jobs.map((x) => (x.client || "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, locale)).map((c) => `<option value="${esc(c)}"></option>`).join("");
+    pickPeople(new Set(j.people || []));
+    billingLabel();
+    $("#jf-del").hidden = !id; disarm($("#jf-del"), "Delete");
+    showErr($("#jf-err"), "");
+    openSheet("#d-jobform"); $("#jf-client").focus();
+  }
+  const pickedPeople = () => new Set($$("#jf-people input:checked").map((i) => i.value));
+  function pickPeople(sel) {
+    const date = $("#jf-date").value, end = $("#jf-end").value > date ? $("#jf-end").value : date;
+    const people = state.people.slice().sort(byName);
+    $("#jf-people").innerHTML = people.length ? people.map((p) => {
+      const clash = date && state.jobs.find((o) => o.id !== editingJob && (o.people || []).includes(p.id) && o.date <= end && date <= jobEnd(o));
+      return `<label class="pickp"><input type="checkbox" value="${p.id}" ${sel.has(p.id) ? "checked" : ""}><span class="nm">${esc(p.name)}</span><span class="rl ${clash ? "clash" : ""}">${clash ? `Also on ${esc(jobName(clash))}` : roleLabel(p.role)}</span></label>`;
+    }).join("") : `<p class="hint">Add people to the board first, then book them here.</p>`;
+  }
+  function billingLabel() { $("#jf-amount-lbl").textContent = $("#jf-billing").value === "hourly" ? "Client rate per hour" : "Fee to client"; }
+  $("#jf-billing").addEventListener("change", billingLabel);
+  $("#jf-date").addEventListener("change", () => pickPeople(pickedPeople()));
+  $("#jf-end").addEventListener("change", () => pickPeople(pickedPeople()));
+  $("#d-jobform form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const err = $("#jf-err");
+    const client = $("#jf-client").value.trim(), title = $("#jf-name").value.trim(), date = $("#jf-date").value, end = $("#jf-end").value;
+    const raw = $("#jf-amount").value.trim(), amt = raw === "" ? 0 : parseFloat(raw);
+    if (!client && !title) return showErr(err, "Enter the client or the job name.");
+    if (!date) return showErr(err, "Pick the date of the job.");
+    if (end && end < date) return showErr(err, "The end date is before the start date.");
+    if (!(amt >= 0)) return showErr(err, "Enter what the client pays, or leave it empty.");
+    attempt(e.currentTarget, err, async () => {
+      const prev = state.jobs.find((x) => x.id === editingJob);
+      const billing = $("#jf-billing").value === "hourly" ? "hourly" : "flat";
+      const rec = await save("jobs", {
+        ...(prev || {}), client, title, date, endDate: end > date ? end : "", call: $("#jf-call").value, location: $("#jf-loc").value.trim(),
+        notes: $("#jf-notes").value.trim(), people: [...pickedPeople()], billing,
+        fee: billing === "flat" ? round2(amt) : Number(prev?.fee) || 0, clientRate: billing === "hourly" ? round2(amt) : Number(prev?.clientRate) || 0,
+        invoiceStatus: $("#jf-inv").value,
+      });
+      $("#d-jobform").close();
+      toast(prev ? "Job saved" : `${jobName(rec)} booked${sync.online ? "" : " · saved on this device"}`);
+    });
+  });
+  $("#jf-del").addEventListener("click", (e) => {
+    const j = state.jobs.find((x) => x.id === editingJob); if (!j) return;
+    armed(e.currentTarget, "Tap again to delete", async () => {
+      await remove("jobs", j);
+      $("#d-jobform").close(); if ($("#d-job").open) $("#d-job").close();
+      toast("Job deleted. Hours and receipts logged on it are kept.");
+    });
+  });
+
+  // Booking select in the hours and receipt forms
+  function jobOptions(sel, selected) {
+    const today = isoDay(), from = addDays(today, -60), to = addDays(today, 30);
+    const rank = (j) => (jobOn(j, today) ? 0 : j.date > today ? 1 : 2);
+    const list = state.jobs.filter((j) => j.id === selected || (jobEnd(j) >= from && j.date <= to))
+      .sort((a, b) => rank(a) - rank(b) || (rank(a) === 2 ? byStart(b, a) : byStart(a, b)));
+    sel.innerHTML = `<option value="">No booking</option>` + list.map((j) => `<option value="${j.id}">${esc(`${fmtShort(j.date)} · ${jobLabel(j)}`)}</option>`).join("");
+    sel.value = list.some((j) => j.id === selected) ? selected : "";
+    sel.closest(".field").hidden = !state.jobs.length;
+  }
+  const bookedOn = (pid, day) => state.jobs.filter((j) => jobOn(j, day) && (j.people || []).includes(pid)).sort(byStart)[0] || null;
+  function applyJobToShift(jid, fresh) {
+    const j = state.jobs.find((x) => x.id === jid); if (!j) return;
+    if (fresh) { const today = isoDay(); $("#sf-date").value = jobOn(j, today) ? today : j.date; }
+    if (j.call && (fresh || !$("#sf-start").value)) $("#sf-start").value = j.call;
+    $("#sf-job").value = jobLabel(j);
+    if (j.location && (fresh || !$("#sf-loc").value.trim())) $("#sf-loc").value = j.location;
+    calcHours();
+  }
+  function jobFillShift(s, shiftId) {
+    const from = shiftFromJob; shiftFromJob = null;
+    let jid = s.jobId || "";
+    if (!shiftId) jid = from?.jobId || bookedOn($("#sf-person").value, isoDay())?.id || "";
+    jobOptions($("#sf-jobid"), jid);
+    if (!shiftId && jid) applyJobToShift(jid, true);
+  }
+  $("#sf-jobid").addEventListener("change", (e) => { if (e.target.value) applyJobToShift(e.target.value, !editingShift); });
+  function jobFillReceipt(pid) { jobOptions($("#rf-job"), bookedOn(pid, isoDay())?.id || ""); }
+  $("#rf-person").addEventListener("change", (e) => { if (!$("#rf-job").value) jobOptions($("#rf-job"), bookedOn(e.target.value, $("#rf-date").value || isoDay())?.id || ""); });
+  function receiptJobRow(r) {
+    const j = r.jobId && state.jobs.find((x) => x.id === r.jobId);
+    return j ? `<dt>Job</dt><dd><button class="btn quiet sm" type="button" data-act="job-open" data-id="${j.id}">${esc(jobLabel(j))}</button></dd>` : "";
+  }
+
+  // CSV: what's on the Jobs view (search applied). Billing columns for admins only.
+  function exportJobs() {
+    const a = isAdmin();
+    const head = ["Date", "Until", "Client", "Job", "Location", "Call", "Booked", "Hours logged"];
+    if (a) head.push("Client pays", "Fee", "Client rate", "Billed", "Wages", "Receipts", "Cost", "Margin", "Invoice");
+    const rows = jobsMatching().sort((x, y) => byStart(y, x)).map((j) => {
+      const mm = jobMoney(j);
+      const r = [j.date, jobEnd(j) > j.date ? jobEnd(j) : "", j.client, j.title, j.location, j.call, crewOf(j).map(personName).join("; "), round2(mm.hours)];
+      if (a) r.push(j.billing === "hourly" ? "Per hour" : "Flat fee", j.billing === "hourly" ? "" : round2(j.fee), j.billing === "hourly" ? round2(j.clientRate) : "", mm.billed, mm.wages, mm.exp, mm.cost, mm.margin, INV[invOf(j)]);
+      return r;
+    });
+    download(`jobs-${isoDay()}.csv`, [head, ...rows]);
+  }
+
+  document.addEventListener("click", (e) => {
+    const t = e.target.closest("[data-act]"); if (!t || t.disabled) return;
+    const id = t.dataset.id;
+    switch (t.dataset.act) {
+      case "job-open": jobOpenId = id; renderJob(id); return openSheet("#d-job");
+      case "job-add": return openJob();
+      case "job-edit": return openJob(id);
+      case "job-log": shiftFromJob = { jobId: id }; openShift(t.dataset.person); shiftFromJob = null; return;
+      case "job-export": return exportJobs();
+      case "job-inv": {
+        const j = state.jobs.find((x) => x.id === id);
+        if (!j || !isAdmin() || invOf(j) === t.dataset.v) return;
+        return save("jobs", { ...j, invoiceStatus: t.dataset.v }).then(() => toast(`Marked ${INV[t.dataset.v].toLowerCase()}`));
+      }
+    }
+  });
+  $("#d-job").addEventListener("close", () => (jobOpenId = null));
+  $("#job-seg").addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; jui.view = b.dataset.jv; render(); });
+  $("#job-q").addEventListener("input", (e) => { jui.q = e.target.value; render(); });
+  document.addEventListener("toggle", (e) => { if (e.target.classList?.contains("jpast")) jui.pastOpen = e.target.open; }, true);
+
   // ---------- Routing ----------
-  const TABS = ["team", "hours", "receipts", "payments", "settings"];
+  const TABS = ["team", "jobs", "hours", "receipts", "payments", "settings"];
   function route() {
     const h = location.hash.slice(1);
     ui.tab = TABS.includes(h) ? h : "team";
@@ -1015,6 +1344,7 @@
   async function enter(user) {
     const prev = await meta.get("me");
     if (prev && prev.id !== user.id) { await idb.wipe(); await loadState(); } // a different person on this device
+    else if (prev && prev.role !== user.role) await meta.set("rev", 0); // role changed: re-fetch (staff copies of jobs carry no billing)
     me = user; await meta.set("me", user);
     sync.authLost = false;
     $("#auth").hidden = true; $("#app").hidden = false;

@@ -19,7 +19,7 @@ const HOST = process.env.HOST || "0.0.0.0";
 const SESSION_DAYS = 90;
 const MAX_PHOTO_BYTES = 15 * 1024 * 1024;
 const PHOTO_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "application/pdf"]);
-const COLLECTIONS = new Set(["people", "shifts", "payments", "receipts", "settings", "jobs"]);
+const COLLECTIONS = new Set(["people", "shifts", "payments", "receipts", "settings", "jobs", "places"]);
 const ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 
 fs.mkdirSync(PHOTO_DIR, { recursive: true });
@@ -57,11 +57,34 @@ db.exec(`
   INSERT OR IGNORE INTO counters VALUES ('rev', 0);
 `);
 
+// Change history: one row per accepted change, written only by this server.
+// It is not a synced collection, and triggers keep it append-only.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS audit (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    at INTEGER NOT NULL,
+    user_id TEXT,
+    actor TEXT NOT NULL,
+    verb TEXT NOT NULL,
+    c TEXT,
+    rec_id TEXT,
+    person_id TEXT,
+    person_name TEXT,
+    info TEXT NOT NULL DEFAULT '{}'
+  );
+  CREATE INDEX IF NOT EXISTS audit_person ON audit(person_id, id);
+  CREATE INDEX IF NOT EXISTS audit_user ON audit(user_id, id);
+  CREATE TRIGGER IF NOT EXISTS audit_no_update BEFORE UPDATE ON audit BEGIN SELECT RAISE(ABORT, 'audit is append-only'); END;
+  CREATE TRIGGER IF NOT EXISTS audit_no_delete BEFORE DELETE ON audit BEGIN SELECT RAISE(ABORT, 'audit is append-only'); END;
+`);
+// A login can be linked to the person it belongs to on the board ("My page").
+if (!db.prepare("PRAGMA table_info(users)").all().some((c) => c.name === "person_id")) db.exec("ALTER TABLE users ADD COLUMN person_id TEXT");
+
 const q = {
   userCount: db.prepare("SELECT COUNT(*) AS n FROM users"),
   userByName: db.prepare("SELECT * FROM users WHERE username = ?"),
   userById: db.prepare("SELECT * FROM users WHERE id = ?"),
-  users: db.prepare("SELECT id, username, name, role, disabled, created_at FROM users ORDER BY name COLLATE NOCASE"),
+  users: db.prepare("SELECT id, username, name, role, disabled, created_at, person_id AS personId FROM users ORDER BY name COLLATE NOCASE"),
   insertUser: db.prepare("INSERT INTO users (id, username, name, pw_hash, role, created_at) VALUES (?, ?, ?, ?, ?, ?)"),
   session: db.prepare("SELECT u.* FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ? AND s.expires_at > ? AND u.disabled = 0"),
   insertSession: db.prepare("INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)"),
@@ -74,6 +97,9 @@ const q = {
   since: db.prepare("SELECT c, id, data, rev FROM records WHERE rev > ? ORDER BY rev LIMIT ?"),
   bumpRev: db.prepare("UPDATE counters SET value = value + 1 WHERE name = 'rev' RETURNING value"),
   curRev: db.prepare("SELECT value FROM counters WHERE name = 'rev'"),
+  insertAudit: db.prepare("INSERT INTO audit (at, user_id, actor, verb, c, rec_id, person_id, person_name, info) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"),
+  auditPage: db.prepare(`SELECT a.*, u.name AS cur_name FROM audit a LEFT JOIN users u ON u.id = a.user_id
+    WHERE a.id < ? AND (? = '' OR a.person_id = ?) AND (? = '' OR a.user_id = ?) ORDER BY a.id DESC LIMIT ?`),
 };
 
 // ---------- Helpers ----------
@@ -90,7 +116,7 @@ function checkPassword(pw, stored) {
   return crypto.timingSafeEqual(expected, got);
 }
 const sha256 = (s) => crypto.createHash("sha256").update(s).digest("hex");
-const publicUser = (u) => ({ id: u.id, username: u.username, name: u.name, role: u.role });
+const publicUser = (u) => ({ id: u.id, username: u.username, name: u.name, role: u.role, personId: u.person_id || null });
 const str = (v, max = 500) => String(v ?? "").slice(0, max);
 
 function parseCookies(req) {
@@ -235,6 +261,7 @@ function applyChange(user, ch) {
   if (ch.c === "receipts" && prev?.photoUploaded) {
     data.hasPhoto = true; data.photoType = prev.photoType; data.photoUploaded = true;
   }
+  if (ch.c === "shifts" && !data.deleted) applyApproval(user, prev, data);
   data.id = ch.id;
   data.by = prev?.by ?? user.id;
   data.createdAt = prev?.createdAt ?? (Number(data.createdAt) || Date.now());
@@ -244,7 +271,90 @@ function applyChange(user, ch) {
   const rev = q.bumpRev.get().value;
   q.upsertRec.run(ch.c, ch.id, JSON.stringify(data), t, rev, data.deleted ? 1 : 0);
   if (ch.c === "receipts" && data.deleted) fs.rm(photoPath(ch.id), { force: true }, () => {});
+  auditChange(user, ch.c, ch.id, prev, data);
   return { result: "ok" };
+}
+
+// ---------- Approval of hours ----------
+// Hours logged by staff wait for an admin. Only "approved" shifts count toward
+// what is owed; a shift with no approval field (logged before this existed) is
+// approved. Staff can't set these fields: they're derived here from the change.
+const APPROVAL_FIELDS = ["approval", "approvalNote", "approvedBy", "approvedAt"];
+const SHIFT_META = new Set(["id", "by", "createdAt", "updatedAt", "deleted", ...APPROVAL_FIELDS]);
+function stable(v) {
+  if (Array.isArray(v)) return "[" + v.map(stable).join(",") + "]";
+  if (v && typeof v === "object") return "{" + Object.keys(v).filter((k) => v[k] !== undefined).sort().map((k) => JSON.stringify(k) + ":" + stable(v[k])).join(",") + "}";
+  return JSON.stringify(v ?? null);
+}
+// What was worked (date, hours, rate, job…), ignoring bookkeeping fields.
+const shiftContent = (s) => stable(Object.fromEntries(Object.entries(s || {}).filter(([k]) => !SHIFT_META.has(k))));
+function applyApproval(user, prev, data) {
+  const live = prev && !prev.deleted ? prev : null;
+  const was = live ? live.approval || "approved" : null;
+  if (user.role !== "admin") {
+    if (!live || shiftContent(live) !== shiftContent(data)) {
+      // New, or changed since it was reviewed: back in the queue.
+      Object.assign(data, { approval: "pending", approvalNote: "", approvedBy: null, approvedAt: null });
+    } else {
+      for (const k of APPROVAL_FIELDS) data[k] = live[k] ?? (k === "approval" ? "approved" : null);
+    }
+    return;
+  }
+  if (!["approved", "rejected", "pending"].includes(data.approval)) data.approval = was || "approved";
+  data.approvalNote = data.approval === "rejected" ? str(data.approvalNote, 300) : "";
+  if (data.approval === "pending") { data.approvedBy = null; data.approvedAt = null; }
+  else if (data.approval !== was) { data.approvedBy = user.id; data.approvedAt = Date.now(); }
+  else { data.approvedBy = live?.approvedBy ?? user.id; data.approvedAt = live?.approvedAt ?? Date.now(); }
+}
+
+// ---------- Change history ----------
+function personNameOf(id) {
+  const r = id && q.getRec.get("people", id);
+  return r ? JSON.parse(r.data).name || null : null;
+}
+function writeAudit(user, verb, { c = null, id = null, personId = null, personName = null, info = {} } = {}) {
+  q.insertAudit.run(Date.now(), user.id, user.name, verb, c, id, personId, personName ?? personNameOf(personId), JSON.stringify(info));
+}
+const num = (v) => Math.round((Number(v) || 0) * 100) / 100;
+function auditChange(user, c, id, prev, data) {
+  const was = !!prev && !prev.deleted, is = !data.deleted;
+  if (!was && !is) return;
+  const strip = (o) => { const { updatedAt, ...rest } = o || {}; return stable(rest); };
+  if (was && is && strip(prev) === strip(data)) return; // a resend of what's already stored
+  const cur = is ? data : prev, add = !was, del = !is;
+  let verb, info = {}, personId = cur.personId || null, personName = null;
+  if (c === "shifts") {
+    info = { hours: num(cur.hours), date: cur.date || "", job: str(cur.job, 80) };
+    const before = was ? prev.approval || "approved" : null;
+    if (add) { verb = "shift.add"; info.pending = data.approval === "pending"; }
+    else if (del) verb = "shift.delete";
+    else if (user.role === "admin" && data.approval !== before && data.approval !== "pending") {
+      verb = data.approval === "approved" ? "shift.approve" : "shift.reject";
+      if (data.approvalNote) info.note = data.approvalNote;
+    } else { verb = "shift.edit"; info.reopened = before !== "pending" && data.approval === "pending"; }
+  } else if (c === "receipts") {
+    info = { amount: num(cur.amount), date: cur.date || "", category: cur.category || "", description: str(cur.description, 80) };
+    if (add) verb = "receipt.add";
+    else if (del) verb = "receipt.delete";
+    else if (prev.status !== data.status) verb = data.status === "reimbursed" ? "receipt.reimburse" : "receipt.unreimburse";
+    else verb = "receipt.edit";
+  } else if (c === "payments") {
+    info = { amount: num((Number(cur.amount) || 0) + (Number(cur.receiptsAmount) || 0)), receipts: (cur.receiptIds || []).length };
+    verb = add ? "payment.add" : del ? "payment.delete" : "payment.edit";
+  } else if (c === "people") {
+    personId = id; personName = cur.name || null;
+    const sameBut = (a, b) => strip({ ...a, location: 0, locationAt: 0 }) === strip({ ...b, location: 0, locationAt: 0 });
+    if (add) verb = "person.add";
+    else if (del) verb = "person.delete";
+    else if (num(prev.rate) !== num(data.rate)) { verb = "person.rate"; info = { rate: num(data.rate) }; }
+    else if (sameBut(prev, data)) { verb = "person.checkin"; info = { location: str(data.location, 120) }; }
+    else verb = "person.edit";
+  } else if (c === "settings") {
+    verb = "settings.edit"; info = { currency: str(cur.currency, 8) };
+  } else if (c === "places") {
+    verb = add ? "place.add" : del ? "place.delete" : "place.edit"; info = { name: str(cur.name, 120) };
+  } else return;
+  writeAudit(user, verb, { c, id, personId, personName, info });
 }
 
 function handleSync(user, body) {
@@ -272,7 +382,7 @@ function handleSync(user, body) {
   const more = rows.length > LIMIT;
   const page = rows.slice(0, LIMIT);
   const rev = more ? page[page.length - 1].rev : q.curRev.get().value;
-  return { rev, more, denied, records: page.map((r) => ({ c: r.c, id: r.id, data: redactFor(user, r.c, JSON.parse(r.data)) })), fixes };
+  return { rev, more, denied, records: page.map((r) => ({ c: r.c, id: r.id, data: redactFor(user, r.c, JSON.parse(r.data)) })), fixes, me: publicUser(user) };
 }
 
 // ---------- Photos ----------
@@ -433,6 +543,20 @@ async function route(req, res) {
     return send(res, 200, { ok: true });
   }
 
+  // Change history (admin only), newest first, paged by id.
+  if (p === "/api/audit" && req.method === "GET") {
+    if (user.role !== "admin") return fail(res, 403, "Only admins can see the activity log.");
+    const before = Math.floor(Number(url.searchParams.get("before"))) || Number.MAX_SAFE_INTEGER;
+    const limit = Math.min(100, Math.max(1, Math.floor(Number(url.searchParams.get("limit"))) || 50));
+    const person = str(url.searchParams.get("person"), 64), by = str(url.searchParams.get("user"), 64);
+    const rows = q.auditPage.all(before, person, person, by, by, limit + 1);
+    const page = rows.slice(0, limit);
+    return send(res, 200, {
+      entries: page.map((r) => ({ id: r.id, at: r.at, userId: r.user_id, actor: r.cur_name || r.actor, verb: r.verb, c: r.c, recId: r.rec_id, personId: r.person_id, personName: r.person_name, info: JSON.parse(r.info) })),
+      next: rows.length > limit ? page[page.length - 1].id : null,
+    });
+  }
+
   // Account management (admin only).
   if (p.startsWith("/api/users")) {
     if (user.role !== "admin") return fail(res, 403, "Only admins manage accounts.");
@@ -447,6 +571,7 @@ async function route(req, res) {
       if (q.userByName.get(username)) return fail(res, 409, "That username is taken.");
       const id = crypto.randomUUID();
       q.insertUser.run(id, username, name, hashPassword(b.password), role, Date.now());
+      writeAudit(user, "account.add", { info: { target: name, role } });
       return send(res, 200, { ok: true, id });
     }
     const m = p.match(/^\/api\/users\/([A-Za-z0-9-]{1,64})$/);
@@ -455,15 +580,35 @@ async function route(req, res) {
       if (!target) return fail(res, 404, "Account not found.");
       const b = await readJson(req, 10_000);
       if (target.id === user.id && (b.disabled || (b.role && b.role !== "admin"))) return fail(res, 400, "You can't disable or demote your own account.");
+      let personId;
+      if (b.personId !== undefined) {
+        personId = b.personId ? String(b.personId) : null;
+        if (personId) {
+          const rec = ID_RE.test(personId) && q.getRec.get("people", personId);
+          if (!rec || rec.deleted) return fail(res, 400, "That person isn't on the board.");
+          const other = db.prepare("SELECT name FROM users WHERE person_id = ? AND id != ?").get(personId, target.id);
+          if (other) return fail(res, 409, `${JSON.parse(rec.data).name} is already linked to ${other.name}'s login.`);
+        }
+      }
+      const tgt = { target: target.name };
       if (b.password !== undefined) {
         if (!validPassword(b.password)) return fail(res, 400, "Password must be at least 8 characters.");
         db.prepare("UPDATE users SET pw_hash = ? WHERE id = ?").run(hashPassword(b.password), target.id);
         if (target.id !== user.id) q.deleteUserSessions.run(target.id);
+        writeAudit(user, "account.password", { info: tgt });
       }
-      if (b.role === "admin" || b.role === "staff") db.prepare("UPDATE users SET role = ? WHERE id = ?").run(b.role, target.id);
-      if (typeof b.disabled === "boolean") {
+      if ((b.role === "admin" || b.role === "staff") && b.role !== target.role) {
+        db.prepare("UPDATE users SET role = ? WHERE id = ?").run(b.role, target.id);
+        writeAudit(user, "account.role", { info: { ...tgt, role: b.role } });
+      }
+      if (typeof b.disabled === "boolean" && b.disabled !== !!target.disabled) {
         db.prepare("UPDATE users SET disabled = ? WHERE id = ?").run(b.disabled ? 1 : 0, target.id);
         if (b.disabled) q.deleteUserSessions.run(target.id);
+        writeAudit(user, b.disabled ? "account.disable" : "account.enable", { info: tgt });
+      }
+      if (personId !== undefined && personId !== (target.person_id || null)) {
+        db.prepare("UPDATE users SET person_id = ? WHERE id = ?").run(personId, target.id);
+        writeAudit(user, personId ? "account.link" : "account.unlink", { personId: personId || target.person_id || null, info: tgt });
       }
       return send(res, 200, { ok: true });
     }

@@ -23,6 +23,14 @@ The server checks these rules itself, so a staff account can't change rates or p
 
 **Amount owed** = hours × rate − wages paid + receipts not yet reimbursed.
 
+## Staff pages, approvals and history
+
+- **My page**: in **Settings → Team logins**, set who each login *is* on the board. That person's login then opens on their own page: what they're owed, what's been paid, receipts waiting, this month's hours, and one-tap buttons to log hours, add a receipt or check in.
+- **Approving hours**: hours logged by staff wait for an admin and don't count toward what's owed until approved. Admins see them at the top of **Hours** (the count shows on the tab) and approve or reject them, one at a time or several at once. Rejecting asks for a short note the person sees. If someone changes hours that were already approved, they go back to waiting. Hours logged by an admin, and everything logged before this feature, count straight away.
+- **Activity**: admins see who did what, newest first, at the bottom of **Settings**. The server writes it; nobody can edit or delete it.
+- **Saved places**: admins keep a list of studios and venues in **Settings**; they show as one-tap buttons when checking in, with recently used places after them.
+- **Receipt categories**: Travel, Meals, Wardrobe, Hair & make-up, Equipment or Other. Filter by category in **Receipts**, see totals per category, and find the category in the CSV export.
+
 ## Run it on this computer
 
 You need Node.js 22.5 or newer. There's nothing else to install.

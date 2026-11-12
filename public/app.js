@@ -74,15 +74,45 @@
   const meta = { get: async (k) => (await idb.get("meta", k))?.v, set: (k, v) => idb.put("meta", { k, v }) };
 
   // ---------- State ----------
-  const COLLS = ["people", "shifts", "payments", "receipts"];
-  const state = { people: [], shifts: [], payments: [], receipts: [], settings: { currency: "EUR" } };
-  const ui = { tab: "team", role: "all", q: "", hPerson: "", hMonth: isoMonth(), rStatus: "pending", rPerson: "", pPerson: "" };
+  const COLLS = ["people", "shifts", "payments", "receipts", "places"];
+  const state = { people: [], shifts: [], payments: [], receipts: [], places: [], settings: { currency: "EUR" } };
+  const ui = { tab: "team", role: "all", q: "", hPerson: "", hMonth: isoMonth(), rStatus: "pending", rPerson: "", pPerson: "", rCat: "", qSel: new Set(), actPerson: "", actUser: "" };
   let me = null;
   let pendingKeys = new Set();        // records with changes not yet on the server
   let localPhotos = new Map();        // receipt id -> { url, uploaded }
   let sync = { busy: false, online: navigator.onLine, last: 0, error: null, authLost: false };
   const isAdmin = () => me?.role === "admin";
   const mine = (r) => isAdmin() || r.by === me?.id;
+
+  // ---------- Me, approvals, categories ----------
+  // The person on the board this login belongs to (an admin links it in Settings).
+  const myPerson = () => (me?.personId ? state.people.find((p) => p.id === me.personId) || null : null);
+  const staffMe = () => !isAdmin() && !!myPerson();
+  // Hours logged by staff wait for an admin; entries from before approvals existed count as approved.
+  const approvalOf = (s) => s.approval || "approved";
+  const counts = (s) => approvalOf(s) === "approved";
+  const SHIFT_META = new Set(["id", "by", "createdAt", "updatedAt", "deleted", "approval", "approvalNote", "approvedBy", "approvedAt"]);
+  function stable(v) {
+    if (Array.isArray(v)) return "[" + v.map(stable).join(",") + "]";
+    if (v && typeof v === "object") return "{" + Object.keys(v).filter((k) => v[k] !== undefined).sort().map((k) => JSON.stringify(k) + ":" + stable(v[k])).join(",") + "}";
+    return JSON.stringify(v ?? null);
+  }
+  const shiftContent = (s) => stable(Object.fromEntries(Object.entries(s || {}).filter(([k]) => !SHIFT_META.has(k))));
+  // Mirrors the server, so the right state shows while offline. The server has the final say.
+  function withApproval(data) {
+    const prev = data.id ? state.shifts.find((s) => s.id === data.id) : null;
+    if (isAdmin()) return prev || data.approval ? data : { ...data, approval: "approved", approvedBy: me.id, approvedAt: Date.now() };
+    if (!prev || shiftContent(prev) !== shiftContent(data)) return { ...data, approval: "pending", approvalNote: "", approvedBy: null, approvedAt: null };
+    return { ...data, approval: prev.approval || "approved", approvalNote: prev.approvalNote || "", approvedBy: prev.approvedBy ?? null, approvedAt: prev.approvedAt ?? null };
+  }
+  const approvalPill = (s) => approvalOf(s) === "pending" ? `<span class="pill wait">Waiting for approval</span>`
+    : approvalOf(s) === "rejected" ? `<span class="pill over">Rejected</span>` : "";
+  const pendingShifts = () => state.shifts.filter((s) => approvalOf(s) === "pending" && state.people.some((p) => p.id === s.personId))
+    .sort((a, b) => (a.date || "").localeCompare(b.date || "") || (a.createdAt || 0) - (b.createdAt || 0));
+  const CATS = [["travel", "Travel"], ["meals", "Meals"], ["wardrobe", "Wardrobe"], ["hair", "Hair & make-up"], ["equipment", "Equipment"], ["other", "Other"]];
+  const catOf = (r) => (CATS.some(([k]) => k === r.category) ? r.category : "other");
+  const catLabel = (k) => CATS.find(([c]) => c === k)?.[1] || "Other";
+  const accountName = (id) => accounts?.find((a) => a.id === id)?.name || "";
 
   async function loadState() {
     const rows = await idb.all("records");
@@ -102,6 +132,7 @@
 
   // Save a record on this device, queue it for the server, redraw.
   async function save(c, data) {
+    if (c === "shifts" && !data.deleted) data = withApproval(data);
     const now = Date.now();
     const rec = { ...data, id: data.id || uid(), updatedAt: now };
     if (!rec.createdAt) rec.createdAt = now;
@@ -116,6 +147,17 @@
     return rec;
   }
   const remove = (c, rec) => save(c, { ...rec, deleted: true });
+  // Several records in one go (bulk approvals): one write, one redraw.
+  async function saveMany(c, list) {
+    const now = Date.now(), ops = [];
+    for (let data of list) {
+      if (c === "shifts" && !data.deleted) data = withApproval(data);
+      const rec = { ...data, id: data.id || uid(), updatedAt: now, createdAt: data.createdAt || now, by: data.by || me.id };
+      ops.push({ s: "records", val: { key: c + "/" + rec.id, c, id: rec.id, data: rec } }, { s: "outbox", val: { c, id: rec.id, data: rec } });
+    }
+    await idb.batch(ops);
+    await loadState(); render(); kickSync();
+  }
 
   // ---------- Server ----------
   async function api(path, { method = "POST", body, blob } = {}) {
@@ -158,6 +200,7 @@
         }
         ops.push({ s: "meta", val: { k: "rev", v: res.rev } });
         await idb.batch(ops);
+        if (res.me && me && res.me.id === me.id && stable(res.me) !== stable(me)) { me = res.me; await meta.set("me", me); paintMe(); }
         if (res.denied) toast(res.denied === 1 ? "One change wasn't allowed for your account and was undone." : `${res.denied} changes weren't allowed for your account and were undone.`);
         if (res.more || after.length > sent.length) syncAgain = true;
         await loadState();
@@ -238,10 +281,11 @@
   // ---------- Money ----------
   function balances() {
     const map = new Map();
-    for (const p of state.people) map.set(p.id, { earned: 0, paid: 0, rec: 0, recN: 0, hMonth: 0, hAll: 0 });
+    for (const p of state.people) map.set(p.id, { earned: 0, paid: 0, rec: 0, recN: 0, hMonth: 0, hAll: 0, hPend: 0, nPend: 0 });
     const m = isoMonth();
     for (const s of state.shifts) {
       const b = map.get(s.personId); if (!b) continue;
+      if (!counts(s)) { if (approvalOf(s) === "pending") { b.hPend += Number(s.hours) || 0; b.nPend++; } continue; }
       const h = Number(s.hours) || 0;
       b.earned += h * (Number(s.rate) || 0); b.hAll += h;
       if ((s.date || "").startsWith(m)) b.hMonth += h;
@@ -256,13 +300,18 @@
   // ---------- Rendering ----------
   function render() {
     if (!me) return;
+    if (!location.hash.slice(1) && ui.tab === "team" && staffMe()) return route(); // the first sync just linked this login
     const bal = balances();
     const recOpen = state.receipts.filter((r) => r.status !== "reimbursed" && bal.has(r.personId));
     const navRec = $("#nav-rec"); navRec.textContent = recOpen.length; navRec.hidden = !recOpen.length;
+    const waiting = isAdmin() ? pendingShifts().length : 0;
+    const navHrs = $("#nav-hrs"); navHrs.textContent = waiting; navHrs.hidden = !waiting; navHrs.title = `${waiting} waiting for approval`;
     $$(".admin").forEach((el) => (el.hidden = !isAdmin()));
+    paintNav();
     fillFilters();
     if (ui.tab === "team") renderTeam(bal, recOpen);
-    if (ui.tab === "hours") renderHours();
+    if (ui.tab === "me") renderMe(bal);
+    if (ui.tab === "hours") { renderQueue(); renderHours(); }
     if (ui.tab === "receipts") renderReceipts();
     if (ui.tab === "payments") renderPayments();
     if (ui.tab === "settings") renderSettings();
@@ -278,7 +327,7 @@
     let owed = 0, earnedMonth = 0, hMonth = 0, onJob = 0;
     const m = isoMonth();
     for (const b of bal.values()) { if (b.owed > 0) owed += b.owed; hMonth += b.hMonth; }
-    for (const s of state.shifts) if ((s.date || "").startsWith(m) && bal.has(s.personId)) earnedMonth += (Number(s.hours) || 0) * (Number(s.rate) || 0);
+    for (const s of state.shifts) if ((s.date || "").startsWith(m) && bal.has(s.personId) && counts(s)) earnedMonth += (Number(s.hours) || 0) * (Number(s.rate) || 0);
     const today = isoDay();
     for (const p of state.people) if (p.location && p.locationAt && isoDay(new Date(p.locationAt)) === today) onJob++;
     const owedPeople = [...bal.values()].filter((b) => b.owed > 0.004).length;
@@ -288,6 +337,8 @@
       <div><span class="eyebrow">Hours</span><span class="mid">${hrs(hMonth)}</span><span class="note">${money(earnedMonth)} in ${new Date().toLocaleDateString(locale, { month: "long" })}</span></div>
       <div><span class="eyebrow">Receipts</span><span class="mid">${money(recSum)}</span><span class="note">${recOpen.length} to reimburse</span></div>
       <div><span class="eyebrow">Checked in</span><span class="mid">${onJob}<span class="muted">/${state.people.length}</span></span><span class="note">today</span></div>`;
+    const waiting = isAdmin() ? pendingShifts() : [];
+    $("#queue-strip").innerHTML = waiting.length ? `<a class="queue-strip" href="#hours">${ICON.clock}<span><b>${waiting.length} ${waiting.length === 1 ? "entry" : "entries"} waiting for approval</b> · <span class="mono">${hrs(waiting.reduce((a, s) => a + (Number(s.hours) || 0), 0))}</span> logged by staff</span><span class="go">Review</span></a>` : "";
 
     const el = $("#board");
     if (!state.people.length) {
@@ -320,7 +371,7 @@
           </div>
         </div>
         <div class="figs">
-          <div><span class="k">This month</span><span class="v ${b.hMonth ? "" : "zero"}">${hrs(b.hMonth)}</span></div>
+          <div><span class="k">This month</span><span class="v ${b.hMonth ? "" : "zero"}">${hrs(b.hMonth)}</span>${b.hPend ? `<span class="pend">+${hrs(b.hPend)} waiting</span>` : ""}</div>
           <div><span class="k">Receipts</span><span class="v ${b.rec ? "" : "zero"}">${money(b.rec)}</span></div>
           <div><span class="k">Owed</span><span class="v ${b.owed > 0.004 ? "owed" : "zero"}">${money(b.owed)}</span></div>
         </div>
@@ -344,6 +395,9 @@
       el.value = ui[key];
     }
     $("#h-month").value = ui.hMonth;
+    const cat = $("#r-cat");
+    if (!cat.options.length) cat.innerHTML = `<option value="">All categories</option>` + CATS.map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join("");
+    cat.value = ui.rCat;
   }
 
   const shiftsShown = () => state.shifts
@@ -359,13 +413,13 @@
         : empty("Add people first", isAdmin() ? "Hours are logged against someone on the board." : "An admin needs to add the team first.", isAdmin() ? "add-person" : null, "Add person");
       return;
     }
-    let th = 0, tv = 0;
-    for (const s of rows) { th += Number(s.hours) || 0; tv += (Number(s.hours) || 0) * (Number(s.rate) || 0); }
+    let th = 0, tv = 0, hWait = 0;
+    for (const s of rows) { if (!counts(s)) { if (approvalOf(s) === "pending") hWait += Number(s.hours) || 0; continue; } th += Number(s.hours) || 0; tv += (Number(s.hours) || 0) * (Number(s.rate) || 0); }
     const period = ui.hMonth ? new Date(ui.hMonth + "-01T12:00").toLocaleDateString(locale, { month: "long", year: "numeric" }) : "all time";
     el.innerHTML = `<div class="tablebox hours-table"><table>
       <thead><tr><th>Date</th><th>Person</th><th>Job · location</th><th class="n">Call–wrap</th><th class="n">Hours</th><th class="n">Rate</th><th class="n">Earned</th><th></th></tr></thead>
       <tbody>${rows.map((s) => `<tr>
-        <td>${fmtShort(s.date)}${unsyncedTag("shifts", s.id) ? `<span class="sub">${unsyncedTag("shifts", s.id)}</span>` : ""}</td>
+        <td>${fmtShort(s.date)}${unsyncedTag("shifts", s.id) ? `<span class="sub">${unsyncedTag("shifts", s.id)}</span>` : ""}${approvalPill(s) ? `<span class="sub">${approvalPill(s)}</span>` : ""}${approvalOf(s) === "rejected" && s.approvalNote ? `<span class="sub">“${esc(s.approvalNote)}”</span>` : ""}</td>
         <td class="who">${esc(personName(s.personId))}</td>
         <td>${esc(s.job || "—")}${s.location ? `<span class="sub">${esc(s.location)}</span>` : ""}</td>
         <td class="n">${s.start && s.end ? `${esc(s.start)}–${esc(s.end)}` : `<span class="muted">—</span>`}</td>
@@ -374,18 +428,18 @@
         <td class="n">${money((Number(s.hours) || 0) * (Number(s.rate) || 0))}</td>
         <td class="n">${mine(s) ? `<button class="btn quiet sm" type="button" data-act="edit-shift" data-id="${s.id}">Edit</button>` : ""}</td>
       </tr>`).join("")}</tbody>
-      <tfoot><tr><td colspan="4">${rows.length} ${rows.length === 1 ? "entry" : "entries"} · ${esc(period)}</td><td class="n">${hrs(th)}</td><td></td><td class="n">${money(tv)}</td><td></td></tr></tfoot>
+      <tfoot><tr><td colspan="4">${rows.length} ${rows.length === 1 ? "entry" : "entries"} · ${esc(period)}${hWait ? ` · <span class="muted">+ ${hrs(hWait)} waiting for approval</span>` : ""}</td><td class="n">${hrs(th)}</td><td></td><td class="n">${money(tv)}</td><td></td></tr></tfoot>
     </table></div>
     <div class="list">${rows.map((s) => `<button class="list-row" type="button" ${mine(s) ? `data-act="edit-shift" data-id="${s.id}"` : ""}>
         <span class="a">${esc(personName(s.personId))}</span><span class="b">${hrs(s.hours)}</span>
-        <span class="c">${fmtShort(s.date)}${s.job ? " · " + esc(s.job) : ""}${s.location ? " · " + esc(s.location) : ""} ${unsyncedTag("shifts", s.id)}</span><span class="d">${money((Number(s.hours) || 0) * (Number(s.rate) || 0))}</span>
+        <span class="c">${fmtShort(s.date)}${s.job ? " · " + esc(s.job) : ""}${s.location ? " · " + esc(s.location) : ""} ${unsyncedTag("shifts", s.id)}${approvalPill(s) ? ` ${approvalPill(s)}` : ""}</span><span class="d">${money((Number(s.hours) || 0) * (Number(s.rate) || 0))}</span>
       </button>`).join("")}
-      <div class="list-foot"><span>${hrs(th)}</span><span>${money(tv)}</span></div>
+      <div class="list-foot"><span>${hrs(th)}${hWait ? `<small>+ ${hrs(hWait)} waiting</small>` : ""}</span><span>${money(tv)}</span></div>
     </div>`;
   }
 
   const receiptsShown = () => state.receipts
-    .filter((r) => (ui.rStatus === "all" || (ui.rStatus === "reimbursed" ? r.status === "reimbursed" : r.status !== "reimbursed")) && (!ui.rPerson || r.personId === ui.rPerson))
+    .filter((r) => (ui.rStatus === "all" || (ui.rStatus === "reimbursed" ? r.status === "reimbursed" : r.status !== "reimbursed")) && (!ui.rPerson || r.personId === ui.rPerson) && (!ui.rCat || catOf(r) === ui.rCat))
     .sort((a, b) => (b.date || "").localeCompare(a.date || "") || (b.createdAt || 0) - (a.createdAt || 0));
 
   function photoSrc(r) {
@@ -414,12 +468,16 @@
       return;
     }
     const total = rows.reduce((a, r) => a + (Number(r.amount) || 0), 0);
+    const byCat = new Map();
+    for (const r of rows) byCat.set(catOf(r), (byCat.get(catOf(r)) || 0) + (Number(r.amount) || 0));
     el.innerHTML = `<p class="totals-line">${rows.length} ${rows.length === 1 ? "receipt" : "receipts"} · <span class="mono">${money(total)}</span></p>
+      ${byCat.size > 1 || ui.rCat ? `<div class="cat-totals" aria-label="Totals by category">${CATS.filter(([k]) => byCat.has(k)).map(([k, l]) => `<span class="cat-total"><span class="cat c-${k}">${esc(l)}</span><span class="mono">${money(byCat.get(k))}</span></span>`).join("")}</div>` : ""}
       <div class="rgrid">${rows.map((r) => `<article class="receipt">
         <button class="shot" type="button" data-act="view-receipt" data-id="${r.id}" aria-label="Open receipt">${shot(r)}</button>
         <div class="meta">
           <div class="amt"><b>${money(r.amount)}</b>${r.status === "reimbursed" ? `<span class="pill paid">Reimbursed</span>` : `<span class="pill owed">To reimburse</span>`}</div>
           <div class="what">${esc(r.description || "No description")}</div>
+          <div class="cat-line"><span class="cat c-${catOf(r)}">${esc(catLabel(catOf(r)))}</span></div>
           <div class="by">${[esc(personName(r.personId)), fmtShort(r.date)].filter(Boolean).join(" · ")} ${unsyncedTag("receipts", r.id)}</div>
         </div>
       </article>`).join("")}</div>`;
@@ -459,7 +517,7 @@
     if (!isAdmin()) return;
     try { accounts = (await api("/api/users", { method: "GET" })).users; accountsErr = null; }
     catch (e) { accountsErr = e.status ? e.msg : "Connect to the internet to manage logins."; }
-    if (ui.tab === "settings") renderSettings();
+    render();
   }
   let installEvt = null;
   const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
@@ -476,7 +534,8 @@
     el.innerHTML = `
       <section class="panel">
         <h2>Your account</h2>
-        <dl class="kv"><dt>Name</dt><dd>${esc(me.name)}</dd><dt>Username</dt><dd class="mono">${esc(me.username)}</dd><dt>Access</dt><dd>${isAdmin() ? "Admin" : "Staff"}</dd></dl>
+        <dl class="kv"><dt>Name</dt><dd>${esc(me.name)}</dd><dt>Username</dt><dd class="mono">${esc(me.username)}</dd><dt>Access</dt><dd>${isAdmin() ? "Admin" : "Staff"}</dd>
+          <dt>On the board as</dt><dd>${myPerson() ? `${esc(myPerson().name)} · <a href="#me">My page</a>` : `<span class="muted">Not linked${isAdmin() ? " · link it under Team logins" : " · ask an admin to link your login"}</span>`}</dd></dl>
         <div class="sheet-foot"><button class="btn" type="button" data-act="password">Change password</button><button class="btn danger" type="button" id="logout-btn">Sign out</button></div>
       </section>
       <section class="panel">
@@ -500,14 +559,18 @@
         <div id="acct-list">${accountsErr ? `<p class="err">${esc(accountsErr)}</p>` : !accounts ? `<p class="muted">Loading…</p>` : accounts.map((a) => `<div class="acct">
           <div><div class="nm">${esc(a.name)} ${a.disabled ? `<span class="pill over">Disabled</span>` : ""}</div><div class="un">${esc(a.username)} · ${a.role === "admin" ? "Admin" : "Staff"}</div></div>
           <div class="ctl">
+            <label class="link-sel"><span>Is</span><select data-link="${a.id}" aria-label="Person on the board for ${esc(a.name)}"><option value="">Not on the board</option>${state.people.slice().sort(byName).map((p) => `<option value="${p.id}" ${a.personId === p.id ? "selected" : ""}>${esc(p.name)}</option>`).join("")}</select></label>
             <button class="btn sm" type="button" data-act="reset-pw" data-id="${a.id}">Reset password</button>
             ${a.id === me.id ? "" : `<button class="btn sm" type="button" data-act="toggle-role" data-id="${a.id}">${a.role === "admin" ? "Make staff" : "Make admin"}</button>
             <button class="btn sm ${a.disabled ? "" : "danger"}" type="button" data-act="toggle-disabled" data-id="${a.id}">${a.disabled ? "Enable" : "Disable"}</button>`}
           </div></div>`).join("")}</div>
-      </section>` : ""}`;
+      </section>
+      ${placesPanel()}
+      <section class="panel wide" id="activity">${activityShell()}</section>` : ""}`;
     $("#install-btn")?.addEventListener("click", async () => { installEvt.prompt(); await installEvt.userChoice.catch(() => {}); installEvt = null; renderSettings(); });
     $("#currency")?.addEventListener("change", (e) => save("settings", { ...state.settings, id: "main", currency: e.target.value }).then(() => toast("Currency saved")));
     $("#logout-btn").addEventListener("click", (e) => logout(e.currentTarget, ob + ph));
+    if (isAdmin()) { bindSettingsExtras(); paintActivity(); }
   }
 
   // ---------- Person detail ----------
@@ -539,9 +602,9 @@
         <button class="btn sm" type="button" data-act="add-receipt" data-id="${id}">${ICON.cam}Add receipt</button>
         ${isAdmin() ? `<button class="btn sm primary" type="button" data-act="add-payment" data-id="${id}" ${b.owed > 0.004 ? "" : "disabled"}>${ICON.card}Record payment</button>` : ""}
       </div>
-      <h4 class="eyebrow">Hours · ${hrs(b.hAll)} all time</h4>
+      <h4 class="eyebrow">Hours · ${hrs(b.hAll)} all time${b.hPend ? ` · + ${hrs(b.hPend)} waiting for approval` : ""}</h4>
       ${shifts.length ? `<div class="tablebox"><table><thead><tr><th>Date</th><th>Job · location</th><th class="n">Hours</th><th class="n">Earned</th></tr></thead><tbody>
-        ${shifts.slice(0, 60).map((s) => `<tr><td>${fmtShort(s.date)}</td><td>${esc(s.job || "—")}${s.location ? `<span class="sub">${esc(s.location)}</span>` : ""}</td><td class="n">${hrs(s.hours)}</td><td class="n">${money((Number(s.hours) || 0) * (Number(s.rate) || 0))}</td></tr>`).join("")}
+        ${shifts.slice(0, 60).map((s) => `<tr><td>${fmtShort(s.date)}${approvalPill(s) ? `<span class="sub">${approvalPill(s)}</span>` : ""}</td><td>${esc(s.job || "—")}${s.location ? `<span class="sub">${esc(s.location)}</span>` : ""}</td><td class="n">${hrs(s.hours)}</td><td class="n">${money((Number(s.hours) || 0) * (Number(s.rate) || 0))}</td></tr>`).join("")}
       </tbody></table></div>` : `<p class="muted">No hours logged.</p>`}
       <h4 class="eyebrow">Receipts</h4>
       ${recs.length ? `<div class="tablebox"><table><thead><tr><th>Date</th><th>For</th><th class="n">Amount</th><th>Status</th></tr></thead><tbody>
@@ -620,7 +683,8 @@
     ];
     if (isAdmin()) opts.push(["add-payment", ICON.card, "Payment", "Record money paid"]);
     else opts.push(["goto-hours", ICON.clock, "My hours", "See what's logged"]);
-    $("#quick").innerHTML = opts.map(([a, i, t, s]) => `<button type="button" data-act="${a}">${i}<div><b>${t}</b><span>${s}</span></div></button>`).join("");
+    const self = staffMe() ? myPerson().id : "";
+    $("#quick").innerHTML = opts.map(([a, i, t, s]) => `<button type="button" data-act="${a}"${self && ["add-shift", "add-receipt", "loc"].includes(a) ? ` data-id="${self}"` : ""}>${i}<div><b>${t}</b><span>${s}</span></div></button>`).join("");
     openSheet("#d-quick");
   }
 
@@ -671,6 +735,7 @@
     personOptions($("#lf-person"), id || state.people[0]?.id);
     const fill = () => { const p = state.people.find((x) => x.id === (locId || $("#lf-person").value)); $("#lf-who").textContent = p ? p.name.split(" ")[0] : "they"; $("#lf-loc").value = p?.location || ""; };
     $("#lf-person").onchange = fill; fill();
+    paintPlaces();
     showErr($("#lf-err"), "");
     openSheet("#d-loc"); $("#lf-loc").focus(); $("#lf-loc").select();
   }
@@ -771,6 +836,9 @@
     personOptions($("#rf-person"), personId || ui.rPerson || state.people.slice().sort(byName)[0]?.id);
     setPicked(null);
     $("#rf-amount").value = ""; $("#rf-date").value = isoDay(); $("#rf-desc").value = "";
+    const rc = $("#rf-cat");
+    if (!rc.options.length) rc.innerHTML = CATS.map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join("");
+    rc.value = ui.lastCat || "travel";
     showErr($("#rf-err"), "");
     openSheet("#d-receipt");
   }
@@ -810,7 +878,8 @@
     attempt(e.currentTarget, err, async () => {
       const id = uid();
       if (picked) await idb.put("photos", { id, blob: picked, type: picked.type, uploaded: false, savedAt: Date.now() });
-      await save("receipts", { id, personId: $("#rf-person").value, amount: round2(amount), date, description: $("#rf-desc").value.trim(), status: "pending", hasPhoto: !!picked, photoType: picked?.type || null, photoUploaded: false });
+      ui.lastCat = $("#rf-cat").value;
+      await save("receipts", { id, category: $("#rf-cat").value, personId: $("#rf-person").value, amount: round2(amount), date, description: $("#rf-desc").value.trim(), status: "pending", hasPhoto: !!picked, photoType: picked?.type || null, photoUploaded: false });
       $("#d-receipt").close(); setPicked(null);
       toast(`Receipt for ${money(amount)} saved${sync.online ? "" : " on this device"}`);
     });
@@ -829,6 +898,7 @@
       <dl class="kv">
         <dt>For</dt><dd>${esc(r.description || "—")}</dd>
         <dt>Paid by</dt><dd>${esc(personName(r.personId))}</dd>
+        <dt>Category</dt><dd><span class="cat c-${catOf(r)}">${esc(catLabel(catOf(r)))}</span></dd>
         <dt>Date</dt><dd>${fmtDate(r.date)}</dd>
         <dt>Status</dt><dd>${r.status === "reimbursed" ? `<span class="pill paid">Reimbursed${r.reimbursedAt ? " · " + fmtDate(r.reimbursedAt) : ""}</span>` : `<span class="pill owed">To reimburse</span>`}</dd>
       </dl>
@@ -922,9 +992,17 @@
       case "add-person": return openPerson();
       case "edit-person": return openPerson(id);
       case "loc": return openLoc(id);
-      case "add-shift": return openShift(id);
+      case "add-shift": return openShift(id || (staffMe() ? myPerson().id : undefined));
       case "edit-shift": return openShift(null, id);
-      case "add-receipt": return openReceipt(id);
+      case "add-receipt": return openReceipt(id || (staffMe() ? myPerson().id : undefined));
+      case "q-approve": return approve([id]);
+      case "q-approve-sel": return approve([...ui.qSel]);
+      case "q-reject": return openReject([id]);
+      case "q-reject-sel": return openReject([...ui.qSel]);
+      case "place-del": return armed(t, "Remove?", () => { const pl = state.places.find((x) => x.id === id); if (pl) remove("places", pl).then(() => toast("Place removed")); });
+      case "act-more": return loadActivity(true);
+      case "my-hours": ui.hPerson = id; ui.hMonth = ""; location.hash = "hours"; return;
+      case "my-receipts": ui.rPerson = id; ui.rStatus = "all"; $$("#rec-seg button").forEach((x) => x.setAttribute("aria-pressed", String(x.dataset.rs === "all"))); location.hash = "receipts"; return;
       case "view-receipt": return openView(id);
       case "add-payment": return openPay(id);
       case "goto-hours": location.hash = "hours"; return;
@@ -974,6 +1052,307 @@
     img.replaceWith(ph);
   }, true);
 
+  // ---------- My page ----------
+  // Linked staff see "My page" in place of the Team tab; the board stays one tap away.
+  const NAV_SVG = { team: $("#nav-team svg").innerHTML, me: `<circle cx="12" cy="8" r="3.5"/><path d="M5 20c.7-3.6 3.4-5.6 7-5.6s6.3 2 7 5.6"/>` };
+  function paintNav() {
+    const a = $("#nav-team"), on = staffMe();
+    if (a.dataset.me === String(on)) return;
+    a.dataset.me = String(on);
+    a.setAttribute("href", on ? "#me" : "#team");
+    a.querySelector("span").textContent = on ? "My page" : "Team";
+    a.querySelector("svg").innerHTML = on ? NAV_SVG.me : NAV_SVG.team;
+  }
+  function paintMe() {
+    $("#me-chip").innerHTML = `<div><b>${esc(me.name)}</b>${isAdmin() ? "Admin" : "Staff"}</div>`;
+    render();
+  }
+
+  function renderMe(bal) {
+    const el = $("#mypage"), p = myPerson();
+    if (!p) {
+      el.innerHTML = `<div class="view-head"><div><h1>My page</h1><p>Your hours, receipts and what you're owed, in one place.</p></div></div>` +
+        empty("Your login isn't linked to the board yet", isAdmin() ? "Link your login to your name in Settings → Team logins." : "Ask an admin to link your login to your name on the board. Then your hours and balance show here.");
+      return;
+    }
+    const b = bal.get(p.id), m = isoMonth();
+    const desc = (a, c) => (c.date || "").localeCompare(a.date || "") || (c.createdAt || 0) - (a.createdAt || 0);
+    const shifts = state.shifts.filter((s) => s.personId === p.id).sort(desc);
+    const recs = state.receipts.filter((r) => r.personId === p.id).sort(desc);
+    const waitMonth = shifts.filter((s) => approvalOf(s) === "pending" && (s.date || "").startsWith(m)).reduce((a, s) => a + (Number(s.hours) || 0), 0);
+    const rejected = shifts.filter((s) => approvalOf(s) === "rejected");
+    const live = p.location && p.locationAt && Date.now() - p.locationAt < 12 * 3600e3;
+    const shiftRow = (s) => {
+      const inner = `<span class="r-main"><span class="r-title">${fmtShort(s.date)}${s.start && s.end ? ` <span class="muted mono">${esc(s.start)}–${esc(s.end)}</span>` : ""}</span>
+        <span class="r-sub">${[esc(s.job || ""), esc(s.location || "")].filter(Boolean).join(" · ") || "No job noted"}</span></span>
+        <span class="r-end"><span class="mono">${hrs(s.hours)}</span>${approvalPill(s) || unsyncedTag("shifts", s.id)}</span>`;
+      return mine(s) ? `<li><button class="r" type="button" data-act="edit-shift" data-id="${s.id}">${inner}</button></li>` : `<li><div class="r">${inner}</div></li>`;
+    };
+    const recRow = (r) => `<li><button class="r" type="button" data-act="view-receipt" data-id="${r.id}">
+        <span class="r-main"><span class="r-title">${esc(r.description || "Receipt")}</span>
+        <span class="r-sub"><span class="cat c-${catOf(r)}">${esc(catLabel(catOf(r)))}</span> ${fmtShort(r.date)} ${unsyncedTag("receipts", r.id)}</span></span>
+        <span class="r-end"><span class="mono">${money(r.amount)}</span>${r.status === "reimbursed" ? `<span class="pill paid">Reimbursed</span>` : `<span class="pill owed">To reimburse</span>`}</span></button></li>`;
+    el.innerHTML = `
+      <div class="me-head">
+        <div class="me-id">
+          <span class="eyebrow">My page</span>
+          <h1 class="me-name">${esc(p.name)}</h1>
+          <div class="comp-role"><span class="tag ${p.role === "technician" ? "technician" : "model"}">${roleLabel(p.role)}</span>${p.speciality ? `<span>${esc(p.speciality)}</span>` : ""}<span class="mono">${money(p.rate)} / h</span></div>
+        </div>
+        <div class="view-actions"><a class="btn" href="#team">${ICON.pin}Team board</a></div>
+      </div>
+      <div class="summary me-sum">
+        <div><span class="eyebrow">Owed to you</span><span class="big ${b.owed > 0.004 ? "" : "zero"}">${money(b.owed)}</span>
+          <span class="note">${b.owed > 0.004 ? `Wages ${money(Math.max(0, b.wageDue))} · receipts ${money(b.rec)}` : b.owed < -0.004 ? "Paid ahead of hours worked" : "You're paid up"}</span></div>
+        <div><span class="eyebrow">Paid to you</span><span class="mid">${money(b.paid)}</span><span class="note">wages so far</span></div>
+        <div><span class="eyebrow">Receipts</span><span class="mid">${money(b.rec)}</span><span class="note">${b.recN} waiting to be paid back</span></div>
+        <div><span class="eyebrow">This month</span><span class="mid">${hrs(b.hMonth)}</span><span class="note">${waitMonth ? `+ ${hrs(waitMonth)} waiting for approval` : "approved"}</span></div>
+      </div>
+      ${rejected.length ? `<div class="me-alert">${rejected.map((s) => `<div><span><b>${hrs(s.hours)} on ${fmtShort(s.date)} was rejected.</b>${s.approvalNote ? ` “${esc(s.approvalNote)}”` : ""} Fix it and save to send it again.</span>${mine(s) ? `<button class="btn sm" type="button" data-act="edit-shift" data-id="${s.id}">Fix</button>` : ""}</div>`).join("")}</div>` : ""}
+      <div class="me-quick">
+        <button type="button" data-act="add-shift" data-id="${p.id}">${ICON.clock}<span><b>Log my hours</b><small>Call, wrap and job</small></span></button>
+        <button type="button" data-act="add-receipt" data-id="${p.id}">${ICON.cam}<span><b>Add receipt</b><small>Photograph an expense</small></span></button>
+        <button type="button" data-act="loc" data-id="${p.id}" class="${live ? "live" : ""}">${ICON.pin}<span><b>Check in</b><small>${p.location ? `${esc(p.location)} · ${ago(p.locationAt)}` : "Say where you are"}</small></span></button>
+      </div>
+      <div class="me-cols">
+        <section class="panel me-list">
+          <div class="me-list-head"><h2>Recent hours</h2><button class="btn quiet sm" type="button" data-act="my-hours" data-id="${p.id}">All my hours</button></div>
+          ${shifts.length ? `<ul class="rows">${shifts.slice(0, 8).map(shiftRow).join("")}</ul>` : `<p>No hours yet. Log a call and wrap, or just the hours.</p>`}
+          ${b.nPend ? `<p class="me-foot"><span class="pill wait">${b.nPend} waiting</span> Hours count toward what you're owed once an admin approves them.</p>` : ""}
+        </section>
+        <section class="panel me-list">
+          <div class="me-list-head"><h2>Recent receipts</h2><button class="btn quiet sm" type="button" data-act="my-receipts" data-id="${p.id}">All my receipts</button></div>
+          ${recs.length ? `<ul class="rows">${recs.slice(0, 6).map(recRow).join("")}</ul>` : `<p>No receipts. Photograph one when you pay for something on a job.</p>`}
+        </section>
+      </div>`;
+  }
+
+  // ---------- Approval queue (admins) ----------
+  function renderQueue() {
+    const el = $("#queue");
+    if (!isAdmin()) { el.innerHTML = ""; return; }
+    const list = pendingShifts();
+    for (const id of [...ui.qSel]) if (!list.some((s) => s.id === id)) ui.qSel.delete(id);
+    if (!list.length) { el.innerHTML = ""; return; }
+    const n = ui.qSel.size, total = list.reduce((a, s) => a + (Number(s.hours) || 0), 0);
+    el.innerHTML = `<section class="queue" aria-label="Waiting for approval">
+      <div class="queue-head">
+        <div><h2>Waiting for approval</h2><p>${list.length} ${list.length === 1 ? "entry" : "entries"} · <span class="mono">${hrs(total)}</span>. Hours count toward what's owed once approved.</p></div>
+        <div class="queue-acts">
+          <label class="pick-all"><input type="checkbox" id="q-all" ${n === list.length ? "checked" : ""}>Select all</label>
+          <button class="btn sm danger" type="button" data-act="q-reject-sel" ${n ? "" : "disabled"}>Reject${n ? ` ${n}` : ""}</button>
+          <button class="btn sm primary" type="button" data-act="q-approve-sel" ${n ? "" : "disabled"}>Approve${n ? ` ${n}` : ""}</button>
+        </div>
+      </div>
+      <ul class="q-list">${list.map((s) => {
+        const by = accountName(s.by);
+        return `<li class="q-row${ui.qSel.has(s.id) ? " sel" : ""}">
+          <input type="checkbox" class="q-pick" data-id="${s.id}" aria-label="Select ${esc(personName(s.personId))}, ${esc(fmtShort(s.date))}" ${ui.qSel.has(s.id) ? "checked" : ""}>
+          <div class="q-main">
+            <div class="q-top"><b>${esc(personName(s.personId))}</b><span class="mono">${hrs(s.hours)}</span></div>
+            <div class="q-sub">${[fmtShort(s.date), s.start && s.end ? `${esc(s.start)}–${esc(s.end)}` : "", esc(s.job || ""), esc(s.location || "")].filter(Boolean).join(" · ")}</div>
+            <div class="q-by">${by ? `Logged by ${esc(by)}` : "Logged by staff"} · ${ago(s.updatedAt || s.createdAt)} ${unsyncedTag("shifts", s.id)}</div>
+          </div>
+          <div class="q-acts">
+            <button class="btn sm quiet" type="button" data-act="edit-shift" data-id="${s.id}">Edit</button>
+            <button class="btn sm danger" type="button" data-act="q-reject" data-id="${s.id}">Reject</button>
+            <button class="btn sm ok" type="button" data-act="q-approve" data-id="${s.id}">Approve</button>
+          </div>
+        </li>`;
+      }).join("")}</ul>
+    </section>`;
+  }
+  $("#queue").addEventListener("change", (e) => {
+    const t = e.target;
+    if (t.id === "q-all") { ui.qSel = new Set(t.checked ? pendingShifts().map((s) => s.id) : []); }
+    else if (t.classList.contains("q-pick")) { t.checked ? ui.qSel.add(t.dataset.id) : ui.qSel.delete(t.dataset.id); }
+    else return;
+    renderQueue();
+  });
+  async function approve(ids) {
+    const list = ids.map((id) => state.shifts.find((s) => s.id === id)).filter(Boolean);
+    if (!list.length) return;
+    await saveMany("shifts", list.map((s) => ({ ...s, approval: "approved", approvalNote: "", approvedBy: me.id, approvedAt: Date.now() })));
+    ids.forEach((id) => ui.qSel.delete(id)); renderQueue();
+    toast(list.length === 1 ? `${hrs(list[0].hours)} approved for ${personName(list[0].personId)}` : `${list.length} entries approved`);
+  }
+  let rejectIds = [];
+  function openReject(ids) {
+    rejectIds = ids.filter((id) => state.shifts.some((s) => s.id === id));
+    if (!rejectIds.length) return;
+    const one = rejectIds.length === 1 ? state.shifts.find((s) => s.id === rejectIds[0]) : null;
+    $("#rj-title").textContent = one ? `Reject ${hrs(one.hours)} for ${personName(one.personId)}` : `Reject ${rejectIds.length} entries`;
+    $("#rj-what").textContent = one ? [fmtDate(one.date), one.job, one.location].filter(Boolean).join(" · ") : "They stay on the hours list, marked rejected, and don't count toward what's owed.";
+    $("#rj-btn").textContent = one ? "Reject" : `Reject ${rejectIds.length}`;
+    $("#rj-note").value = ""; showErr($("#rj-err"), "");
+    openSheet("#d-reject"); $("#rj-note").focus();
+  }
+  $("#d-reject form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    attempt(e.currentTarget, $("#rj-err"), async () => {
+      const note = $("#rj-note").value.trim().slice(0, 300);
+      const list = rejectIds.map((id) => state.shifts.find((s) => s.id === id)).filter(Boolean);
+      await saveMany("shifts", list.map((s) => ({ ...s, approval: "rejected", approvalNote: note, approvedBy: me.id, approvedAt: Date.now() })));
+      rejectIds.forEach((id) => ui.qSel.delete(id));
+      $("#d-reject").close(); renderQueue();
+      toast(list.length === 1 ? "Rejected. They'll see your note." : `${list.length} entries rejected`);
+    });
+  });
+
+  // ---------- Saved places ----------
+  function placeChip(name, current) {
+    return `<button type="button" class="chip" data-place="${esc(name)}" aria-pressed="${current ? "true" : "false"}">${ICON.pin}<span>${esc(name)}</span></button>`;
+  }
+  // Saved places first, then up to five other places used recently (check-ins and logged hours).
+  function paintPlaces() {
+    const cur = ($("#lf-loc").value || "").trim().toLowerCase();
+    const saved = state.places.slice().sort(byName).map((p) => p.name).filter(Boolean);
+    const seen = new Set(saved.map((x) => x.trim().toLowerCase()));
+    const used = [...state.people.filter((p) => p.location).map((p) => [p.locationAt || 0, p.location]),
+      ...state.shifts.filter((s) => s.location).map((s) => [s.updatedAt || s.createdAt || 0, s.location])].sort((a, b) => b[0] - a[0]);
+    const recent = [];
+    for (const [, loc] of used) { const k = loc.trim().toLowerCase(); if (!k || seen.has(k)) continue; seen.add(k); recent.push(loc.trim()); if (recent.length >= 5) break; }
+    const box = $("#lf-places");
+    box.hidden = !saved.length && !recent.length;
+    box.innerHTML = (saved.length ? `<div class="places-group"><span class="eyebrow">Saved places</span><div class="chips">${saved.map((n) => placeChip(n, n.trim().toLowerCase() === cur)).join("")}</div></div>` : "")
+      + (recent.length ? `<div class="places-group"><span class="eyebrow">Recently used</span><div class="chips">${recent.map((n) => placeChip(n, n.toLowerCase() === cur)).join("")}</div></div>` : "");
+  }
+  // One tap checks in.
+  $("#lf-places").addEventListener("click", (e) => {
+    const c = e.target.closest("[data-place]"); if (!c) return;
+    $("#lf-loc").value = c.dataset.place;
+    $("#d-loc form").requestSubmit();
+  });
+  function placesPanel() {
+    const list = state.places.slice().sort(byName);
+    return `<section class="panel">
+      <h2>Saved places</h2>
+      <p>Studios and venues the team goes to often. They show as one-tap buttons when someone checks in.</p>
+      ${list.length ? `<div class="chips">${list.map((pl) => `<span class="chip static">${ICON.pin}<span>${esc(pl.name)}</span><button type="button" class="chip-x" data-act="place-del" data-id="${pl.id}" aria-label="Remove ${esc(pl.name)}">Remove</button></span>`).join("")}</div>` : ""}
+      <form class="inline-add" id="place-form" novalidate>
+        <input class="input" id="place-name" maxlength="120" autocomplete="off" placeholder="Studio 3, Via Tortona" aria-label="New place" value="${esc(ui.placeDraft || "")}">
+        <button class="btn" type="submit">Add place</button>
+      </form>
+    </section>`;
+  }
+
+  // ---------- Activity (admins; the server keeps it, nobody can edit it) ----------
+  const act = { entries: [], next: null, loading: false, err: null, loaded: false };
+  function activityShell() {
+    const people = state.people.slice().sort(byName);
+    return `<div class="view-head"><div><h2>Activity</h2><p>Who did what, newest first. The server records every change; nobody can edit this list.</p></div>
+      <div class="view-actions act-filters">
+        <select id="act-person" aria-label="About">${`<option value="">About anyone</option>` + people.map((p) => `<option value="${p.id}" ${ui.actPerson === p.id ? "selected" : ""}>${esc(p.name)}</option>`).join("")}</select>
+        <select id="act-user" aria-label="Done by">${`<option value="">By anyone</option>` + (accounts || []).map((a) => `<option value="${a.id}" ${ui.actUser === a.id ? "selected" : ""}>${esc(a.name)}</option>`).join("")}</select>
+      </div></div>
+      <div id="act-list"></div>`;
+  }
+  async function loadActivity(more) {
+    if (act.loading) return;
+    act.loading = true; paintActivity();
+    try {
+      const qs = new URLSearchParams({ limit: "40" });
+      if (ui.actPerson) qs.set("person", ui.actPerson);
+      if (ui.actUser) qs.set("user", ui.actUser);
+      if (more && act.next) qs.set("before", act.next);
+      const r = await api("/api/audit?" + qs, { method: "GET" });
+      act.entries = more ? [...act.entries, ...r.entries] : r.entries; act.next = r.next; act.err = null;
+    } catch (e) { act.err = e.status ? e.msg : "Connect to the internet to see the activity."; }
+    act.loading = false; act.loaded = true; paintActivity();
+  }
+  function actPerson(e) {
+    const name = state.people.find((p) => p.id === e.personId)?.name || e.personName;
+    return name ? `<b>${esc(name)}</b>` : "someone";
+  }
+  function actText(e) {
+    // "Sara logged 8.5 h for themselves" rather than repeating her name.
+    const own = /^(shift|receipt)\.|^person\.checkin$/.test(e.verb);
+    const self = own && !!e.personId && accounts?.find((a) => a.id === e.userId)?.personId === e.personId;
+    const i = e.info || {}, P = self ? "themselves" : actPerson(e), Ps = self ? "their" : `${actPerson(e)}'s`, T = `<b>${esc(i.target || "a login")}</b>`;
+    const H = `<span class="mono">${hrs(i.hours)}</span>`, M = `<span class="mono">${money(i.amount)}</span>`;
+    const on = i.date ? ` · ${fmtShort(i.date)}` : "";
+    const t = {
+      "shift.add": `logged ${H} for ${P}${on}${i.pending ? ` <span class="pill wait">Waiting</span>` : ""}`,
+      "shift.edit": `changed ${Ps} hours to ${H}${on}${i.reopened ? ` <span class="pill wait">Back to waiting</span>` : ""}`,
+      "shift.delete": `deleted ${H} for ${P}${on}`,
+      "shift.approve": `approved ${H} for ${P}${on}`,
+      "shift.reject": `rejected ${H} for ${P}${on}${i.note ? ` <span class="muted">“${esc(i.note)}”</span>` : ""}`,
+      "receipt.add": `added a ${M} ${i.category ? esc(catLabel(i.category).toLowerCase()) + " " : ""}receipt for ${P}`,
+      "receipt.edit": `edited a ${M} receipt for ${P}`,
+      "receipt.delete": `deleted a ${M} receipt for ${P}`,
+      "receipt.reimburse": `marked ${Ps} ${M} receipt reimbursed`,
+      "receipt.unreimburse": `put ${Ps} ${M} receipt back to reimburse`,
+      "payment.add": `recorded a ${M} payment to ${P}`,
+      "payment.edit": `edited a ${M} payment to ${P}`,
+      "payment.delete": `deleted a ${M} payment to ${P}`,
+      "person.add": `added ${P} to the board`,
+      "person.edit": `updated ${P}'s details`,
+      "person.rate": `set ${P}'s rate to <span class="mono">${money(i.rate)}</span> / h`,
+      "person.checkin": i.location ? (self ? `checked in at ${esc(i.location)}` : `checked ${P} in at ${esc(i.location)}`) : `cleared ${Ps} location`,
+      "person.delete": `removed ${P} from the board`,
+      "settings.edit": `set the currency to ${esc(i.currency || "")}`,
+      "place.add": `saved the place ${esc(i.name || "")}`,
+      "place.edit": `renamed a saved place to ${esc(i.name || "")}`,
+      "place.delete": `removed the saved place ${esc(i.name || "")}`,
+      "account.add": `created a ${i.role === "admin" ? "admin" : "staff"} login for ${T}`,
+      "account.link": `linked ${T}'s login to ${P}`,
+      "account.unlink": `unlinked ${T}'s login from ${P}`,
+      "account.role": `made ${T} ${i.role === "admin" ? "an admin" : "staff"}`,
+      "account.disable": `disabled ${T}'s login`,
+      "account.enable": `enabled ${T}'s login`,
+      "account.password": `reset ${T}'s password`,
+    }[e.verb] || esc(e.verb);
+    return `<b>${esc(e.actor || "Someone")}</b> ${t}`;
+  }
+  const actTone = (v) => v === "shift.approve" || v === "receipt.reimburse" ? "ok" : v === "shift.reject" || v.endsWith(".delete") ? "risk" : v.startsWith("payment") ? "money" : v === "shift.add" || v === "receipt.add" ? "new" : "";
+  function dayLabel(ms) {
+    const d = isoDay(new Date(ms)), today = isoDay(), y = isoDay(new Date(Date.now() - 864e5));
+    return d === today ? "Today" : d === y ? "Yesterday" : fmtShort(d);
+  }
+  function paintActivity() {
+    const el = $("#act-list"); if (!el) return;
+    if (!act.loaded && !act.loading) { loadActivity(false); return; }
+    if (act.err && !act.entries.length) { el.innerHTML = `<p class="err">${esc(act.err)}</p>`; return; }
+    if (!act.entries.length) { el.innerHTML = act.loading ? `<p class="muted">Loading…</p>` : `<p class="muted">Nothing yet. Changes appear here as people log hours, add receipts and record payments.</p>`; return; }
+    let day = "", html = "";
+    for (const e of act.entries) {
+      const dl = dayLabel(e.at);
+      if (dl !== day) { if (day) html += `</ol>`; html += `<h3 class="act-day eyebrow">${esc(dl)}</h3><ol class="act-list">`; day = dl; }
+      html += `<li class="act-row"><span class="act-dot ${actTone(e.verb)}" aria-hidden="true"></span><span class="act-txt">${actText(e)}</span><time datetime="${new Date(e.at).toISOString()}" title="${esc(new Date(e.at).toLocaleString(locale))}">${Date.now() - e.at < 864e5 ? ago(e.at) : new Date(e.at).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })}</time></li>`;
+    }
+    html += `</ol>`;
+    if (act.next) html += `<div class="act-more"><button class="btn" type="button" data-act="act-more" ${act.loading ? "disabled" : ""}>${act.loading ? "Loading…" : "Show older"}</button></div>`;
+    if (act.err) html += `<p class="err">${esc(act.err)}</p>`;
+    el.innerHTML = html;
+  }
+  function bindSettingsExtras() {
+    $$("[data-link]").forEach((sel) => sel.addEventListener("change", async () => {
+      const id = sel.dataset.link, personId = sel.value || null;
+      try {
+        await api("/api/users/" + id, { body: { personId } });
+        if (id === me.id) { me = { ...me, personId }; await meta.set("me", me); }
+        const a = accounts.find((x) => x.id === id);
+        toast(personId ? `${a?.name || "Login"} linked to ${personName(personId)}` : `${a?.name || "Login"} unlinked`);
+        act.loaded = false;
+      } catch (err) { toast(err.msg || "Connect to the internet to change links."); }
+      loadAccounts();
+    }));
+    $("#place-name").addEventListener("input", (e) => (ui.placeDraft = e.target.value));
+    $("#place-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const name = $("#place-name").value.trim().replace(/\s+/g, " ").slice(0, 120);
+      if (!name) return $("#place-name").focus();
+      if (state.places.some((p) => (p.name || "").toLowerCase() === name.toLowerCase())) return toast("That place is already saved");
+      ui.placeDraft = "";
+      await save("places", { name });
+      toast(`${name} saved`);
+      $("#place-name")?.focus();
+    });
+    $("#act-person").addEventListener("change", (e) => { ui.actPerson = e.target.value; act.loaded = false; act.entries = []; paintActivity(); });
+    $("#act-user").addEventListener("change", (e) => { ui.actUser = e.target.value; act.loaded = false; act.entries = []; paintActivity(); });
+  }
+  $("#r-cat").addEventListener("change", (e) => { ui.rCat = e.target.value; render(); });
+
   // ---------- CSV export ----------
   const cell = (v) => { const s = String(v ?? ""); return /[",\n;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
   function download(name, rows) {
@@ -983,22 +1362,22 @@
   }
   $$("[data-export]").forEach((btn) => btn.addEventListener("click", () => {
     const kind = btn.dataset.export;
-    if (kind === "hours") download(`hours-${ui.hMonth || "all"}.csv`, [["Date", "Person", "Role", "Job", "Location", "Call", "Wrap", "Hours", "Rate", "Earned"],
-      ...shiftsShown().map((s) => { const p = state.people.find((x) => x.id === s.personId); return [s.date, p?.name, roleLabel(p?.role), s.job, s.location, s.start, s.end, s.hours, s.rate, round2(s.hours * s.rate)]; })]);
-    else if (kind === "receipts") download(`receipts-${isoDay()}.csv`, [["Date", "Person", "Description", "Amount", "Status", "Reimbursed on"],
-      ...receiptsShown().map((r) => [r.date, personName(r.personId), r.description, r.amount, r.status === "reimbursed" ? "Reimbursed" : "To reimburse", r.reimbursedAt || ""])]);
+    if (kind === "hours") download(`hours-${ui.hMonth || "all"}.csv`, [["Date", "Person", "Role", "Job", "Location", "Call", "Wrap", "Hours", "Rate", "Earned", "Approval"],
+      ...shiftsShown().map((s) => { const p = state.people.find((x) => x.id === s.personId); return [s.date, p?.name, roleLabel(p?.role), s.job, s.location, s.start, s.end, s.hours, s.rate, round2(s.hours * s.rate), { approved: "Approved", pending: "Waiting for approval", rejected: "Rejected" }[approvalOf(s)]]; })]);
+    else if (kind === "receipts") download(`receipts-${isoDay()}.csv`, [["Date", "Person", "Category", "Description", "Amount", "Status", "Reimbursed on"],
+      ...receiptsShown().map((r) => [r.date, personName(r.personId), catLabel(catOf(r)), r.description, r.amount, r.status === "reimbursed" ? "Reimbursed" : "To reimburse", r.reimbursedAt || ""])]);
     else download(`payments-${isoDay()}.csv`, [["Date", "Person", "Method", "Note", "Wages", "Receipts", "Total"],
       ...state.payments.filter((p) => !ui.pPerson || p.personId === ui.pPerson).sort((a, b) => (b.date || "").localeCompare(a.date || "")).map((p) => [p.date, personName(p.personId), p.method, p.note, p.amount, p.receiptsAmount || 0, round2((p.amount || 0) + (p.receiptsAmount || 0))])]);
   }));
 
   // ---------- Routing ----------
-  const TABS = ["team", "hours", "receipts", "payments", "settings"];
+  const TABS = ["team", "hours", "receipts", "payments", "settings", "me"];
   function route() {
     const h = location.hash.slice(1);
-    ui.tab = TABS.includes(h) ? h : "team";
-    $$(".nav a").forEach((a) => (a.dataset.tab === ui.tab ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current")));
+    ui.tab = TABS.includes(h) ? h : staffMe() ? "me" : "team"; // linked staff land on their own page
+    $$(".nav a").forEach((a) => (a.dataset.tab === ui.tab || (a.dataset.tab === "team" && ui.tab === "me") ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current")));
     $$("[data-view]").forEach((v) => (v.hidden = v.dataset.view !== ui.tab));
-    if (ui.tab === "settings") loadAccounts();
+    if (ui.tab === "settings") { act.loaded = false; loadAccounts(); }
     render();
     window.scrollTo(0, 0);
   }
@@ -1020,6 +1399,7 @@
     $("#auth").hidden = true; $("#app").hidden = false;
     $("#me-chip").innerHTML = `<div><b>${esc(user.name)}</b>${user.role === "admin" ? "Admin" : "Staff"}</div>`;
     navigator.storage?.persist?.().catch(() => {});
+    loadAccounts();
     route();
     runSync();
   }

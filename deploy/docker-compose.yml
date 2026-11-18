@@ -1,0 +1,42 @@
+# Lumia: the Talent & Crew app on lumia.rogatski.com (team) and adminlumia.rogatski.com (office),
+# published through its own Cloudflare Tunnel (no open ports on this machine).
+#
+#   Start / update:  docker compose -f deploy/docker-compose.yml up -d --build
+#   Logs:            docker compose -f deploy/docker-compose.yml logs -f
+#   Stop:            docker compose -f deploy/docker-compose.yml down
+#
+# Files outside the repo (LUMIA_HOME, default /data/lumia):
+#   data/            database, receipt photos, daily backups   <- back this up
+#   lumia.env        SETUP_CODE=... (one-time code for creating the first admin)
+#   tunnel/          config.yml + credentials.json for the "lumia" tunnel (secret)
+name: lumia
+
+services:
+  app:
+    build: ..
+    image: talent-crew:latest
+    restart: unless-stopped
+    env_file: ${LUMIA_HOME:-/data/lumia}/lumia.env
+    environment:
+      DATA_DIR: /data
+      ADMIN_HOSTS: adminlumia.rogatski.com
+      CLIENT_HOSTS: lumia.rogatski.com
+      COOKIE_SECURE: "1"
+    volumes:
+      - ${LUMIA_HOME:-/data/lumia}/data:/data
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  tunnel:
+    image: cloudflare/cloudflared:2026.10.2
+    restart: unless-stopped
+    user: "1000:1000"
+    command: ["tunnel", "--no-autoupdate", "--config", "/etc/cloudflared/config.yml", "run"]
+    volumes:
+      - ${LUMIA_HOME:-/data/lumia}/tunnel:/etc/cloudflared:ro
+    depends_on:
+      app:
+        condition: service_healthy

@@ -23,7 +23,7 @@
 <!-- ============ Sign in / first-run setup ============ -->
 <div class="auth" id="auth" hidden>
   <div class="auth-art">
-    <div class="wordmark"><b>Talent <i>&amp;</i> Crew</b><span>Booking-desk ledger</span></div>
+    <div class="wordmark"><b>Talent <i>&amp;</i> Crew</b><span id="auth-site">Booking-desk ledger</span></div>
     <h2>Call time.<br>Wrap.<br><em>Paid.</em></h2>
     <div class="callsheet" aria-hidden="true">
       <div><span>Call</span><b>06:00</b></div>
@@ -34,16 +34,18 @@
   </div>
   <div class="auth-form">
     <form id="login-form" novalidate>
-      <h1>Sign in</h1>
-      <p>Use the account your agency gave you.</p>
+      <h1 id="li-title">Sign in</h1>
+      <p id="li-sub">Use the account your agency gave you.</p>
       <div class="field"><label for="li-user">Username</label><input id="li-user" autocomplete="username" autocapitalize="none" spellcheck="false" required></div>
       <div class="field"><label for="li-pass">Password</label><input id="li-pass" type="password" autocomplete="current-password" required></div>
       <div class="err" id="li-err" hidden></div>
       <button class="btn primary block" type="submit" id="li-btn">Sign in</button>
+      <p class="other-site" id="li-other" hidden></p>
     </form>
     <form id="setup-form" novalidate hidden>
       <h1>Set up your agency</h1>
       <p>Create the first admin account. You'll add the rest of the team after.</p>
+      <div class="field" id="su-code-wrap" hidden><label for="su-code">Setup code</label><input id="su-code" autocomplete="one-time-code" autocapitalize="none" spellcheck="false"><span class="hint">The one-time code you were given with this site.</span></div>
       <div class="field"><label for="su-name">Your name</label><input id="su-name" autocomplete="name" required></div>
       <div class="field"><label for="su-user">Username</label><input id="su-user" autocomplete="username" autocapitalize="none" spellcheck="false" required></div>
       <div class="field"><label for="su-pass">Password</label><input id="su-pass" type="password" autocomplete="new-password" minlength="8" required><span class="hint">At least 8 characters.</span></div>

@@ -55,6 +55,33 @@ Settings (all optional):
 | `PORT` | `3000` | Port to listen on |
 | `DATA_DIR` | `./data` | Where the database and photos are kept |
 | `COOKIE_SECURE` | off | Set to `1` to force secure cookies (normally detected automatically behind HTTPS) |
+| `ADMIN_HOSTS` | – | Office site host name(s), comma-separated. Only admin accounts can sign in there. |
+| `CLIENT_HOSTS` | – | Team site host name(s). Only staff accounts can sign in there. With neither set, any address serves everyone. |
+| `SETUP_CODE` | – | One-time code required to create the first admin account. |
+
+The server also writes a copy of the database to `data/backups/` once a day and keeps the last 14.
+
+## Live: lumia.rogatski.com and adminlumia.rogatski.com
+
+| Site | Address | Who signs in |
+|---|---|---|
+| Team | https://lumia.rogatski.com | Models and technicians (staff accounts) |
+| Office | https://adminlumia.rogatski.com | Agency admins |
+
+Both sites are the same server. Each one turns away the other kind of account and points to the right address. They install on phones as separate apps ("Talent & Crew" and "Talent & Crew · Office").
+
+It runs on this machine with Docker and its own Cloudflare Tunnel named `lumia`, so no ports are open on the router. Plain `http://` visits are redirected to `https://`.
+
+```bash
+docker compose -f deploy/docker-compose.yml up -d --build   # start, or deploy an update
+docker compose -f deploy/docker-compose.yml logs -f         # watch logs
+docker compose -f deploy/docker-compose.yml down            # stop
+```
+
+Both containers restart by themselves after a reboot. The files that aren't in this repo live in `/data/lumia`:
+- `data/`: the database, receipt photos and daily backups. **Copy this folder off the machine regularly.**
+- `lumia.env`: `SETUP_CODE`, needed once to create the first admin on the office site.
+- `tunnel/`: the tunnel's settings and secret credentials.
 
 ## Put it online for the team
 

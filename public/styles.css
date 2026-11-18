@@ -800,3 +800,11 @@ button.chip:hover { border-color: var(--accent); }
   .act-row time { grid-column: 2; }
   .link-sel select { max-width: 100%; }
 }
+
+/* Sign-in: pointer to the other site (office vs team) */
+.auth-form .other-site { margin: 4px 0 0; font-size: var(--t-sm); color: var(--muted); }
+.auth-form .other-site a { color: var(--accent); font-weight: 600; text-decoration: none; overflow-wrap: anywhere; }
+.auth-form .other-site a:hover { text-decoration: underline; }
+
+/* Buttons inside number columns keep the normal UI font */
+td.n .btn { font-family: var(--f-body); }

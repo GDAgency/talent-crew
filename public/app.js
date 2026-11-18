@@ -2065,7 +2065,7 @@ ${docCss()}
     const err = $("#su-err"), btn = $("#su-btn");
     showErr(err, ""); btn.disabled = true;
     try {
-      const r = await api("/api/setup", { body: { name: $("#su-name").value.trim(), username: $("#su-user").value.trim(), password: $("#su-pass").value } });
+      const r = await api("/api/setup", { body: { code: $("#su-code").value.trim(), name: $("#su-name").value.trim(), username: $("#su-user").value.trim(), password: $("#su-pass").value } });
       await enter(r.user);
     } catch (x) { showErr(err, x.status ? x.msg : "No connection. You need to be online to set up."); }
     finally { btn.disabled = false; }
@@ -2090,8 +2090,28 @@ ${docCss()}
 
   $("#today").textContent = new Date().toLocaleDateString(locale, { weekday: "short", day: "numeric", month: "short", year: "numeric" });
 
+  // Office site (admins) or team site (staff): adjust the sign-in screen to match.
+  async function loadSite() {
+    let site = await meta.get("site").catch(() => null);
+    try { const r = await fetch("/api/site", { credentials: "same-origin" }); if (r.ok) { site = await r.json(); await meta.set("site", site); } } catch { /* offline: use the saved copy */ }
+    if (!site) return;
+    const host = (u) => (u ? u.replace(/^https?:\/\//, "") : "");
+    const other = $("#li-other");
+    if (site.site === "admin") {
+      $("#auth-site").textContent = "Office";
+      $("#li-title").textContent = "Office sign in";
+      $("#li-sub").textContent = "For agency admins: people, rates, jobs and payments.";
+      if (site.clientUrl) { other.hidden = false; other.innerHTML = `Model or technician? Sign in at <a href="${esc(site.clientUrl)}">${esc(host(site.clientUrl))}</a>`; }
+    } else if (site.site === "client") {
+      $("#auth-site").textContent = "Team";
+      if (site.adminUrl) { other.hidden = false; other.innerHTML = `Agency admin? Use <a href="${esc(site.adminUrl)}">${esc(host(site.adminUrl))}</a>`; }
+    }
+    $("#su-code-wrap").hidden = !site.setupCode;
+  }
+
   async function boot() {
     if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
+    await loadSite();
     await loadState();
     sync.last = (await meta.get("lastSync")) || 0;
     const cached = await meta.get("me");

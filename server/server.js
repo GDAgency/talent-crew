@@ -22,6 +22,31 @@ const PHOTO_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "applicati
 const COLLECTIONS = new Set(["people", "shifts", "payments", "receipts", "settings", "jobs", "places"]);
 const ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 
+// ---------- Two sites, one server ----------
+// ADMIN_HOSTS (e.g. adminlumia.rogatski.com) is the office site: admin accounts only.
+// CLIENT_HOSTS (e.g. lumia.rogatski.com) is the team site: staff accounts only.
+// With neither set (running on your own computer) any host serves everyone.
+const hostList = (v) => String(v || "").split(",").map((h) => h.trim().toLowerCase()).filter(Boolean);
+const ADMIN_HOSTS = hostList(process.env.ADMIN_HOSTS);
+const CLIENT_HOSTS = hostList(process.env.CLIENT_HOSTS);
+const SPLIT_SITES = ADMIN_HOSTS.length > 0 || CLIENT_HOSTS.length > 0;
+// First-run setup can require a one-time code, so nobody who finds the site first can claim it.
+const SETUP_CODE = String(process.env.SETUP_CODE || "");
+function siteOf(req) {
+  if (!SPLIT_SITES) return "any";
+  const host = String(req.headers.host || "").toLowerCase().replace(/:\d+$/, "");
+  if (ADMIN_HOSTS.includes(host)) return "admin";
+  if (CLIENT_HOSTS.includes(host)) return "client";
+  return "unknown";
+}
+const roleAllowed = (site, role) => site === "any" || (site === "admin" && role === "admin") || (site === "client" && role !== "admin");
+const siteUrl = (hosts) => (hosts[0] ? `https://${hosts[0]}` : null);
+function wrongSiteMessage(site) {
+  return site === "admin"
+    ? `This is the office site, for admins. Team members sign in at ${CLIENT_HOSTS[0] || "the team site"}.`
+    : `Admins sign in on the office site: ${ADMIN_HOSTS[0] || "the admin site"}.`;
+}
+
 fs.mkdirSync(PHOTO_DIR, { recursive: true });
 
 // ---------- Database ----------
@@ -136,7 +161,10 @@ function sessionCookie(req, token, maxAge) {
 function currentUser(req) {
   const token = parseCookies(req).tc_session;
   if (!token) return null;
-  return q.session.get(sha256(token), Date.now()) || null;
+  const u = q.session.get(sha256(token), Date.now()) || null;
+  // A session only works on the site that matches the account's role (re-checked on every
+  // request, so promoting or demoting someone moves them to the other site).
+  return u && roleAllowed(siteOf(req), u.role) ? u : null;
 }
 function startSession(req, res, user) {
   const token = crypto.randomBytes(32).toString("base64url");
@@ -453,6 +481,16 @@ function serveStatic(req, res, urlPath) {
   });
 }
 
+// Each site installs as its own app, with its own name.
+function serveManifest(req, res, site) {
+  fs.readFile(path.join(PUBLIC_DIR, "manifest.webmanifest"), "utf8", (err, text) => {
+    if (err) return fail(res, 404, "Not found");
+    const m = JSON.parse(text);
+    if (site === "admin") { m.name = `${m.name} · Office`; m.short_name = "T&C Office"; }
+    send(res, 200, Buffer.from(JSON.stringify(m)), { "Content-Type": "application/manifest+json", "Cache-Control": "no-cache" });
+  });
+}
+
 // ---------- Router ----------
 const SECURITY_HEADERS = {
   "X-Content-Type-Options": "nosniff",
@@ -466,10 +504,24 @@ async function route(req, res) {
   for (const [k, v] of Object.entries(SECURITY_HEADERS)) res.setHeader(k, v);
   const url = new URL(req.url, "http://x");
   const p = url.pathname;
-  const ip = req.headers["x-forwarded-for"]?.split(",")[0].trim() || req.socket.remoteAddress;
+  const ip = req.headers["cf-connecting-ip"] || req.headers["x-forwarded-for"]?.split(",")[0].trim() || req.socket.remoteAddress;
+  const site = siteOf(req);
+
+  if (p === "/api/health") return send(res, 200, { ok: true });
+  if (site === "unknown") return fail(res, 404, "Unknown site.");
+  // Behind Cloudflare: send plain-http visitors to https, and tell browsers to stay on https.
+  if (SPLIT_SITES) {
+    const proto = String(req.headers["x-forwarded-proto"] || "").toLowerCase();
+    if (proto === "http") {
+      res.writeHead(301, { Location: `https://${req.headers.host}${req.url}`, "Cache-Control": "no-store" });
+      return res.end();
+    }
+    if (proto === "https") res.setHeader("Strict-Transport-Security", "max-age=31536000");
+  }
 
   if (!p.startsWith("/api/")) {
     if (req.method !== "GET" && req.method !== "HEAD") return fail(res, 405, "Method not allowed");
+    if (p === "/manifest.webmanifest") return serveManifest(req, res, site);
     return serveStatic(req, res, p);
   }
 
@@ -477,17 +529,28 @@ async function route(req, res) {
   // it to cross-site form posts, so it blocks CSRF together with SameSite.
   if (req.method !== "GET" && req.headers["x-tc"] !== "1") return fail(res, 403, "Missing request header.");
 
-  if (p === "/api/health") return send(res, 200, { ok: true });
+  if (p === "/api/site" && req.method === "GET") {
+    return send(res, 200, { site, adminUrl: siteUrl(ADMIN_HOSTS), clientUrl: siteUrl(CLIENT_HOSTS), setupCode: !!SETUP_CODE });
+  }
 
   if (p === "/api/me" && req.method === "GET") {
-    if (q.userCount.get().n === 0) return send(res, 200, { needsSetup: true });
+    if (q.userCount.get().n === 0) {
+      if (site === "client") return fail(res, 401, "This site isn't set up yet.");
+      return send(res, 200, { needsSetup: true });
+    }
     const u = currentUser(req);
     return u ? send(res, 200, { user: publicUser(u) }) : fail(res, 401, "Not signed in.");
   }
 
   if (p === "/api/setup" && req.method === "POST") {
     if (q.userCount.get().n !== 0) return fail(res, 409, "Setup is already done.");
+    if (site === "client") return fail(res, 403, wrongSiteMessage("client"));
+    if (throttled(ip)) return fail(res, 429, "Too many attempts. Wait 15 minutes and try again.");
     const b = await readJson(req);
+    if (SETUP_CODE) {
+      const given = Buffer.from(str(b.code, 200).trim()), want = Buffer.from(SETUP_CODE);
+      if (given.length !== want.length || !crypto.timingSafeEqual(given, want)) { noteFail(ip); return fail(res, 403, "That setup code is wrong."); }
+    }
     const username = str(b.username, 40).trim(), name = str(b.name, 80).trim();
     if (!validUsername(username)) return fail(res, 400, "Username: 3–40 letters, numbers or . _ @ -");
     if (!name) return fail(res, 400, "Enter your name.");
@@ -507,6 +570,7 @@ async function route(req, res) {
       return fail(res, 401, "Wrong username or password.");
     }
     loginFails.delete(ip);
+    if (!roleAllowed(site, u.role)) return fail(res, 403, wrongSiteMessage(site));
     startSession(req, res, u);
     return send(res, 200, { user: publicUser(u) });
   }
@@ -629,3 +693,21 @@ server.listen(PORT, HOST, () => {
   console.log(`Talent & Crew running on http://localhost:${PORT}  (data in ${DATA_DIR})`);
 });
 setInterval(() => q.purgeSessions.run(Date.now()), 3600e3).unref();
+
+// ---------- Daily backups ----------
+// A consistent copy of the database once a day in DATA_DIR/backups (14 kept).
+// Receipt photos are plain files in DATA_DIR/photos; back up the whole DATA_DIR off this machine too.
+const BACKUP_DIR = path.join(DATA_DIR, "backups");
+function backupToday() {
+  try {
+    fs.mkdirSync(BACKUP_DIR, { recursive: true });
+    const file = path.join(BACKUP_DIR, `ledger-${new Date().toISOString().slice(0, 10)}.db`);
+    if (fs.existsSync(file)) return;
+    db.exec(`VACUUM INTO '${file.replace(/'/g, "''")}'`);
+    const old = fs.readdirSync(BACKUP_DIR).filter((f) => /^ledger-\d{4}-\d{2}-\d{2}\.db$/.test(f)).sort().slice(0, -14);
+    for (const f of old) fs.rmSync(path.join(BACKUP_DIR, f), { force: true });
+    console.log(`Backup written: ${file}`);
+  } catch (e) { console.error("Backup failed:", e.message); }
+}
+backupToday();
+setInterval(backupToday, 3600e3).unref();

@@ -13,7 +13,7 @@
   const isoDay = (d = new Date()) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
   const isoMonth = (d = new Date()) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
   const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
-  const locale = navigator.language || "en-GB";
+  const locale = "it-IT";
   const uid = () => (crypto.randomUUID ? crypto.randomUUID() : [...crypto.getRandomValues(new Uint8Array(16))].map((b) => b.toString(16).padStart(2, "0")).join(""));
   const byName = (a, b) => (a.name || "").localeCompare(b.name || "", locale);
 
@@ -105,13 +105,16 @@
     if (!prev || shiftContent(prev) !== shiftContent(data)) return { ...data, approval: "pending", approvalNote: "", approvedBy: null, approvedAt: null };
     return { ...data, approval: prev.approval || "approved", approvalNote: prev.approvalNote || "", approvedBy: prev.approvedBy ?? null, approvedAt: prev.approvedAt ?? null };
   }
-  const approvalPill = (s) => approvalOf(s) === "pending" ? `<span class="pill wait">Waiting for approval</span>`
-    : approvalOf(s) === "rejected" ? `<span class="pill over">Rejected</span>` : "";
+  const approvalPill = (s) => approvalOf(s) === "pending" ? `<span class="pill wait">In attesa di approvazione</span>`
+    : approvalOf(s) === "rejected" ? `<span class="pill over">Rifiutato</span>` : "";
   const pendingShifts = () => state.shifts.filter((s) => approvalOf(s) === "pending" && state.people.some((p) => p.id === s.personId))
     .sort((a, b) => (a.date || "").localeCompare(b.date || "") || (a.createdAt || 0) - (b.createdAt || 0));
-  const CATS = [["travel", "Travel"], ["meals", "Meals"], ["wardrobe", "Wardrobe"], ["hair", "Hair & make-up"], ["equipment", "Equipment"], ["other", "Other"]];
+  const CATS = [["travel", "Viaggi"], ["meals", "Pasti"], ["wardrobe", "Guardaroba"], ["hair", "Trucco e parrucco"], ["equipment", "Attrezzatura"], ["other", "Altro"]];
   const catOf = (r) => (CATS.some(([k]) => k === r.category) ? r.category : "other");
-  const catLabel = (k) => CATS.find(([c]) => c === k)?.[1] || "Other";
+  const catLabel = (k) => CATS.find(([c]) => c === k)?.[1] || "Altro";
+  // Payment methods are stored as their original English option text; show them in Italian.
+  const METHODS = [["Bank transfer", "Bonifico"], ["Cash", "Contanti"], ["Card", "Carta"], ["Other", "Altro"]];
+  const methodLabel = (m) => METHODS.find(([k]) => k === m)?.[1] || m || "";
   const accountName = (id) => accounts?.find((a) => a.id === id)?.name || "";
 
   async function loadState() {
@@ -167,7 +170,7 @@
     const r = await fetch(path, { method, headers, credentials: "same-origin", body: blob || (body !== undefined ? JSON.stringify(body) : undefined) });
     let j = null;
     try { j = await r.json(); } catch { /* empty */ }
-    if (!r.ok) throw Object.assign(new Error(j?.error || "Request failed"), { status: r.status, msg: j?.error });
+    if (!r.ok) throw Object.assign(new Error(j?.error || "Richiesta non riuscita"), { status: r.status, msg: j?.error });
     return j;
   }
 
@@ -201,7 +204,7 @@
         ops.push({ s: "meta", val: { k: "rev", v: res.rev } });
         await idb.batch(ops);
         if (res.me && me && res.me.id === me.id && stable(res.me) !== stable(me)) { me = res.me; await meta.set("me", me); paintMe(); }
-        if (res.denied) toast(res.denied === 1 ? "One change wasn't allowed for your account and was undone." : `${res.denied} changes weren't allowed for your account and were undone.`);
+        if (res.denied) toast(res.denied === 1 ? "Una modifica non è consentita al tuo account ed è stata annullata." : `${res.denied} modifiche non sono consentite al tuo account e sono state annullate.`);
         if (res.more || after.length > sent.length) syncAgain = true;
         await loadState();
         render();
@@ -211,7 +214,7 @@
       await meta.set("lastSync", sync.last);
     } catch (e) {
       if (e.status === 401) { sync.authLost = true; }
-      else if (e.status) { sync.error = e.msg || "The server refused the sync."; }
+      else if (e.status) { sync.error = e.msg || "Il server ha rifiutato la sincronizzazione."; }
       else { sync.online = false; }
     } finally {
       sync.busy = false; paintSync(); render();
@@ -236,7 +239,7 @@
       } catch (e) {
         if (e.status === 404 || e.status === 403 || e.status === 415 || e.status === 413) {
           await idb.put("photos", { ...p, uploaded: true, failed: e.msg || "rejected" });
-          toast(`A receipt photo couldn't be stored: ${e.msg || "rejected by the server"}`);
+          toast(`Impossibile salvare la foto di una ricevuta: ${e.msg || "rifiutata dal server"}`);
         } else throw e;
       }
     }
@@ -261,16 +264,16 @@
   function ago(ms) {
     if (!ms) return "";
     const s = Math.round((Date.now() - ms) / 1000);
-    if (s < 60) return "just now";
-    if (s < 3600) return Math.floor(s / 60) + " min ago";
-    if (s < 86400) return Math.floor(s / 3600) + " h ago";
+    if (s < 60) return "adesso";
+    if (s < 3600) return Math.floor(s / 60) + " min fa";
+    if (s < 86400) return Math.floor(s / 3600) + " h fa";
     const d = Math.floor(s / 86400);
-    if (d < 7) return d === 1 ? "yesterday" : d + " days ago";
+    if (d < 7) return d === 1 ? "ieri" : d + " giorni fa";
     return new Date(ms).toLocaleDateString(locale, { day: "numeric", month: "short" });
   }
-  const personName = (id) => state.people.find((p) => p.id === id)?.name || "Removed person";
-  const roleLabel = (r) => (r === "technician" ? "Technician" : "Model");
-  const unsyncedTag = (c, id) => (pendingKeys.has(c + "/" + id) ? `<span class="unsynced">On this device</span>` : "");
+  const personName = (id) => state.people.find((p) => p.id === id)?.name || "Persona rimossa";
+  const roleLabel = (r) => (r === "technician" ? "Tecnico" : "Modello/a");
+  const unsyncedTag = (c, id) => (pendingKeys.has(c + "/" + id) ? `<span class="unsynced">Su questo dispositivo</span>` : "");
 
   function toast(msg) {
     const t = $("#toast"); t.textContent = msg; t.hidden = false;
@@ -295,7 +298,7 @@
     for (const b of map.values()) { b.wageDue = round2(b.earned - b.paid); b.owed = round2(b.wageDue + b.rec); }
     return map;
   }
-  const statusPill = (b) => b.owed > 0.004 ? `<span class="pill owed">Owed</span>` : b.owed < -0.004 ? `<span class="pill over">Overpaid</span>` : `<span class="pill paid">Paid up</span>`;
+  const statusPill = (b) => b.owed > 0.004 ? `<span class="pill owed">Da pagare</span>` : b.owed < -0.004 ? `<span class="pill over">Pagato in eccesso</span>` : `<span class="pill paid">In regola</span>`;
 
   // ---------- Pay rules ----------
   // Terms are set per person by an admin and copied onto every shift when it's logged
@@ -332,23 +335,23 @@
   const fmtMult = (m) => (Math.round(m * 100) / 100).toLocaleString(locale) + "×";
   function termsText(t) {
     const parts = t.payType === "day"
-      ? [`${money(t.dayRate)} a day`, ...(t.halfDayRate && t.halfDayUnder ? [`${money(t.halfDayRate)} half day under ${hrs(t.halfDayUnder)}`] : [])]
+      ? [`${money(t.dayRate)} al giorno`, ...(t.halfDayRate && t.halfDayUnder ? [`${money(t.halfDayRate)} mezza giornata sotto le ${hrs(t.halfDayUnder)}`] : [])]
       : [`${money(t.rate)} / h`];
-    if (t.otAfter) parts.push(`overtime after ${hrs(t.otAfter)} at ${fmtMult(t.otMult)}${t.payType === "day" ? ` of ${money(t.rate)} / h` : ""}`);
+    if (t.otAfter) parts.push(`straordinario oltre ${hrs(t.otAfter)} a ${fmtMult(t.otMult)}${t.payType === "day" ? ` di ${money(t.rate)} / h` : ""}`);
     return parts.join(" · ");
   }
-  // "8 h × €25.00 + 2 h overtime × €25.00 × 1.5 = €275.00", "Day rate €400.00", …
+  // "8 h × €25.00 + 2 h straordinario × €25.00 × 1.5 = €275.00", "Day rate €400.00", …
   function payExplain(hours, t, total = true) {
     const p = payCalc(hours, t);
-    const ot = p.overtimeHours ? ` + ${hrs(p.overtimeHours)} overtime × ${money(t.rate)} × ${(Math.round(t.otMult * 100) / 100).toLocaleString(locale)}` : "";
+    const ot = p.overtimeHours ? ` + ${hrs(p.overtimeHours)} straordinario × ${money(t.rate)} × ${(Math.round(t.otMult * 100) / 100).toLocaleString(locale)}` : "";
     if (t.payType === "day") {
-      const base = p.basis === "half-day" ? `Half day (under ${hrs(t.halfDayUnder)}) ${money(t.halfDayRate)}` : `Day rate ${money(t.dayRate)}`;
+      const base = p.basis === "half-day" ? `Mezza giornata (sotto le ${hrs(t.halfDayUnder)}) ${money(t.halfDayRate)}` : `Tariffa giornaliera ${money(t.dayRate)}`;
       return base + ot + (ot && total ? ` = ${money(p.amount)}` : "");
     }
     return `${hrs(p.regularHours)} × ${money(t.rate)}${ot}${total ? ` = ${money(p.amount)}` : ""}`;
   }
-  const otSub = (s) => { const o = shiftPay(s).overtimeHours; return o ? `<span class="sub">${hrs(o)} overtime</span>` : ""; };
-  const rateCell = (t) => (t.payType === "day" ? `${money(t.dayRate)}<span class="sub">a day</span>` : money(t.rate));
+  const otSub = (s) => { const o = shiftPay(s).overtimeHours; return o ? `<span class="sub">${hrs(o)} straordinario</span>` : ""; };
+  const rateCell = (t) => (t.payType === "day" ? `${money(t.dayRate)}<span class="sub">al giorno</span>` : money(t.rate));
 
   // ---------- Rendering ----------
   function render() {
@@ -358,7 +361,7 @@
     const recOpen = state.receipts.filter((r) => r.status !== "reimbursed" && bal.has(r.personId));
     const navRec = $("#nav-rec"); navRec.textContent = recOpen.length; navRec.hidden = !recOpen.length;
     const waiting = isAdmin() ? pendingShifts().length : 0;
-    const navHrs = $("#nav-hrs"); navHrs.textContent = waiting; navHrs.hidden = !waiting; navHrs.title = `${waiting} waiting for approval`;
+    const navHrs = $("#nav-hrs"); navHrs.textContent = waiting; navHrs.hidden = !waiting; navHrs.title = `${waiting} in attesa di approvazione`;
     $$(".admin").forEach((el) => (el.hidden = !isAdmin()));
     paintNav();
     fillFilters();
@@ -388,18 +391,18 @@
     const owedPeople = [...bal.values()].filter((b) => b.owed > 0.004).length;
     const recSum = recOpen.reduce((a, r) => a + (Number(r.amount) || 0), 0);
     $("#summary").innerHTML = `
-      <div><span class="eyebrow">Owed to the team</span><span class="big ${owed > 0.004 ? "" : "zero"}">${money(owed)}</span><span class="note">${owedPeople ? `${owedPeople} ${owedPeople === 1 ? "person" : "people"} waiting to be paid` : "Everyone is paid up"}</span></div>
-      <div><span class="eyebrow">Hours</span><span class="mid">${hrs(hMonth)}</span><span class="note">${money(earnedMonth)} in ${new Date().toLocaleDateString(locale, { month: "long" })}</span></div>
-      <div><span class="eyebrow">Receipts</span><span class="mid">${money(recSum)}</span><span class="note">${recOpen.length} to reimburse</span></div>
-      <div><span class="eyebrow">Checked in</span><span class="mid">${onJob}<span class="muted">/${state.people.length}</span></span><span class="note">today${bookedTodayNote()}</span></div>`;
+      <div><span class="eyebrow">Da pagare al team</span><span class="big ${owed > 0.004 ? "" : "zero"}">${money(owed)}</span><span class="note">${owedPeople ? (owedPeople === 1 ? "1 persona attende il pagamento" : `${owedPeople} persone attendono il pagamento`) : "Tutti in regola"}</span></div>
+      <div><span class="eyebrow">Ore</span><span class="mid">${hrs(hMonth)}</span><span class="note">${money(earnedMonth)} a ${new Date().toLocaleDateString(locale, { month: "long" })}</span></div>
+      <div><span class="eyebrow">Ricevute</span><span class="mid">${money(recSum)}</span><span class="note">${recOpen.length} da rimborsare</span></div>
+      <div><span class="eyebrow">Posizione segnalata</span><span class="mid">${onJob}<span class="muted">/${state.people.length}</span></span><span class="note">oggi${bookedTodayNote()}</span></div>`;
     const waiting = isAdmin() ? pendingShifts() : [];
-    $("#queue-strip").innerHTML = waiting.length ? `<a class="queue-strip" href="#hours">${ICON.clock}<span><b>${waiting.length} ${waiting.length === 1 ? "entry" : "entries"} waiting for approval</b> · <span class="mono">${hrs(waiting.reduce((a, s) => a + (Number(s.hours) || 0), 0))}</span> logged by staff</span><span class="go">Review</span></a>` : "";
+    $("#queue-strip").innerHTML = waiting.length ? `<a class="queue-strip" href="#hours">${ICON.clock}<span><b>${waiting.length === 1 ? "1 voce in attesa" : `${waiting.length} voci in attesa`} di approvazione</b> · <span class="mono">${hrs(waiting.reduce((a, s) => a + (Number(s.hours) || 0), 0))}</span> registrate dallo staff</span><span class="go">Controlla</span></a>` : "";
 
     const el = $("#board");
     if (!state.people.length) {
       el.innerHTML = isAdmin()
-        ? empty("No one on the books yet", "Add your models and technicians with their hourly rate. Then the team can log hours, check in their location and photograph receipts.", "add-person", "Add the first person")
-        : empty("No one on the books yet", "An admin needs to add the team before hours and receipts can be logged.");
+        ? empty("Ancora nessuno nel team", "Aggiungi modelli e tecnici con la loro tariffa oraria. Poi il team potrà registrare le ore, segnalare la propria posizione e fotografare le ricevute.", "add-person", "Aggiungi la prima persona")
+        : empty("Ancora nessuno nel team", "Un amministratore deve aggiungere il team prima che si possano registrare ore e ricevute.");
       return;
     }
     const q = ui.q.trim().toLowerCase();
@@ -407,7 +410,7 @@
     if (ui.role === "model" || ui.role === "technician") list = list.filter((p) => (p.role || "model") === ui.role);
     if (ui.role === "owed") list = list.filter((p) => (bal.get(p.id)?.owed || 0) > 0.004);
     if (q) list = list.filter((p) => [p.name, p.location, p.speciality].some((v) => (v || "").toLowerCase().includes(q)));
-    if (!list.length) { el.innerHTML = empty("Nobody matches", "Try a different filter or search."); return; }
+    if (!list.length) { el.innerHTML = empty("Nessun risultato", "Prova un altro filtro o un'altra ricerca."); return; }
     el.innerHTML = `<div class="board">${list.map((p) => {
       const b = bal.get(p.id);
       const live = p.location && p.locationAt && Date.now() - p.locationAt < 12 * 3600e3;
@@ -421,21 +424,21 @@
             ${statusPill(b)}
           </div>
           <div class="where ${live ? "live" : ""}">${ICON.pin}
-            <div class="txt">${p.location ? `<div class="loc">${esc(p.location)}</div><div class="ago">Updated ${ago(p.locationAt)}</div>` : `<div class="loc unknown">Location unknown</div>`}</div>
-            <button class="btn quiet sm" type="button" data-act="loc" data-id="${p.id}">Update</button>
+            <div class="txt">${p.location ? `<div class="loc">${esc(p.location)}</div><div class="ago">Aggiornata ${ago(p.locationAt)}</div>` : `<div class="loc unknown">Posizione sconosciuta</div>`}</div>
+            <button class="btn quiet sm" type="button" data-act="loc" data-id="${p.id}">Aggiorna</button>
           </div>
           ${bookingLine(p.id)}
         </div>
         <div class="figs">
-          <div><span class="k">This month</span><span class="v ${b.hMonth ? "" : "zero"}">${hrs(b.hMonth)}</span>${b.hPend ? `<span class="pend">+${hrs(b.hPend)} waiting</span>` : ""}</div>
-          <div><span class="k">Receipts</span><span class="v ${b.rec ? "" : "zero"}">${money(b.rec)}</span></div>
-          <div><span class="k">Owed</span><span class="v ${b.owed > 0.004 ? "owed" : "zero"}">${money(b.owed)}</span></div>
+          <div><span class="k">Questo mese</span><span class="v ${b.hMonth ? "" : "zero"}">${hrs(b.hMonth)}</span>${b.hPend ? `<span class="pend">+${hrs(b.hPend)} in attesa</span>` : ""}</div>
+          <div><span class="k">Ricevute</span><span class="v ${b.rec ? "" : "zero"}">${money(b.rec)}</span></div>
+          <div><span class="k">Da pagare</span><span class="v ${b.owed > 0.004 ? "owed" : "zero"}">${money(b.owed)}</span></div>
         </div>
         <div class="comp-acts">
-          <button class="btn sm" type="button" data-act="add-shift" data-id="${p.id}">${ICON.clock}Hours</button>
-          <button class="btn sm" type="button" data-act="add-receipt" data-id="${p.id}">${ICON.cam}Receipt</button>
-          ${isAdmin() ? `<button class="btn sm" type="button" data-act="add-payment" data-id="${p.id}" ${b.owed > 0.004 ? "" : "disabled"}>${ICON.card}Pay</button>
-          <button class="btn quiet sm end" type="button" data-act="edit-person" data-id="${p.id}">Edit</button>` : ""}
+          <button class="btn sm" type="button" data-act="add-shift" data-id="${p.id}">${ICON.clock}Ore</button>
+          <button class="btn sm" type="button" data-act="add-receipt" data-id="${p.id}">${ICON.cam}Ricevuta</button>
+          ${isAdmin() ? `<button class="btn sm" type="button" data-act="add-payment" data-id="${p.id}" ${b.owed > 0.004 ? "" : "disabled"}>${ICON.card}Paga</button>
+          <button class="btn quiet sm end" type="button" data-act="edit-person" data-id="${p.id}">Modifica</button>` : ""}
         </div>
       </article>`;
     }).join("")}</div>`;
@@ -443,7 +446,7 @@
 
   function fillFilters() {
     const people = state.people.slice().sort(byName);
-    const opts = `<option value="">Everyone</option>` + people.map((p) => `<option value="${p.id}">${esc(p.name)}</option>`).join("");
+    const opts = `<option value="">Tutti</option>` + people.map((p) => `<option value="${p.id}">${esc(p.name)}</option>`).join("");
     for (const [sel, key] of [["#h-person", "hPerson"], ["#r-person", "rPerson"], ["#p-person", "pPerson"]]) {
       const el = $(sel);
       if (el.dataset.sig !== opts) { el.innerHTML = opts; el.dataset.sig = opts; }
@@ -452,7 +455,7 @@
     }
     $("#h-month").value = ui.hMonth;
     const cat = $("#r-cat");
-    if (!cat.options.length) cat.innerHTML = `<option value="">All categories</option>` + CATS.map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join("");
+    if (!cat.options.length) cat.innerHTML = `<option value="">Tutte le categorie</option>` + CATS.map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join("");
     cat.value = ui.rCat;
   }
 
@@ -465,15 +468,15 @@
     const rows = shiftsShown();
     if (!rows.length) {
       el.innerHTML = state.people.length
-        ? empty(ui.hMonth ? "No hours logged for this month" : "No hours logged yet", "Log a call and wrap time, or just the hours. It works without signal and syncs when you're back online.", "add-shift", "Log hours")
-        : empty("Add people first", isAdmin() ? "Hours are logged against someone on the board." : "An admin needs to add the team first.", isAdmin() ? "add-person" : null, "Add person");
+        ? empty(ui.hMonth ? "Nessuna ora registrata questo mese" : "Ancora nessuna ora registrata", "Registra convocazione e fine, o solo le ore. Funziona anche senza campo e si sincronizza quando torni online.", "add-shift", "Registra ore")
+        : empty("Prima aggiungi le persone", isAdmin() ? "Le ore si registrano a nome di qualcuno del team." : "Prima un amministratore deve aggiungere il team.", isAdmin() ? "add-person" : null, "Aggiungi persona");
       return;
     }
     let th = 0, tv = 0, hWait = 0;
     for (const s of rows) { if (!counts(s)) { if (approvalOf(s) === "pending") hWait += Number(s.hours) || 0; continue; } th += Number(s.hours) || 0; tv += shiftPay(s).amount; }
-    const period = ui.hMonth ? new Date(ui.hMonth + "-01T12:00").toLocaleDateString(locale, { month: "long", year: "numeric" }) : "all time";
+    const period = ui.hMonth ? new Date(ui.hMonth + "-01T12:00").toLocaleDateString(locale, { month: "long", year: "numeric" }) : "sempre";
     el.innerHTML = `<div class="tablebox hours-table"><table>
-      <thead><tr><th>Date</th><th>Person</th><th>Job · location</th><th class="n">Call–wrap</th><th class="n">Hours</th><th class="n">Rate</th><th class="n">Earned</th><th></th></tr></thead>
+      <thead><tr><th>Data</th><th>Persona</th><th>Lavoro · posizione</th><th class="n">Convocazione–fine</th><th class="n">Ore</th><th class="n">Tariffa</th><th class="n">Guadagnato</th><th></th></tr></thead>
       <tbody>${rows.map((s) => `<tr>
         <td>${fmtShort(s.date)}${unsyncedTag("shifts", s.id) ? `<span class="sub">${unsyncedTag("shifts", s.id)}</span>` : ""}${approvalPill(s) ? `<span class="sub">${approvalPill(s)}</span>` : ""}${approvalOf(s) === "rejected" && s.approvalNote ? `<span class="sub">“${esc(s.approvalNote)}”</span>` : ""}</td>
         <td class="who">${esc(personName(s.personId))}</td>
@@ -482,15 +485,15 @@
         <td class="n">${hrs(s.hours)}${otSub(s)}</td>
         <td class="n">${rateCell(shiftTerms(s))}</td>
         <td class="n">${money(shiftPay(s).amount)}</td>
-        <td class="n">${mine(s) ? `<button class="btn quiet sm" type="button" data-act="edit-shift" data-id="${s.id}">Edit</button>` : ""}</td>
+        <td class="n">${mine(s) ? `<button class="btn quiet sm" type="button" data-act="edit-shift" data-id="${s.id}">Modifica</button>` : ""}</td>
       </tr>`).join("")}</tbody>
-      <tfoot><tr><td colspan="4">${rows.length} ${rows.length === 1 ? "entry" : "entries"} · ${esc(period)}${hWait ? ` · <span class="muted">+ ${hrs(hWait)} waiting for approval</span>` : ""}</td><td class="n">${hrs(th)}</td><td></td><td class="n">${money(tv)}</td><td></td></tr></tfoot>
+      <tfoot><tr><td colspan="4">${rows.length === 1 ? "1 voce" : `${rows.length} voci`} · ${esc(period)}${hWait ? ` · <span class="muted">+ ${hrs(hWait)} in attesa di approvazione</span>` : ""}</td><td class="n">${hrs(th)}</td><td></td><td class="n">${money(tv)}</td><td></td></tr></tfoot>
     </table></div>
     <div class="list">${rows.map((s) => `<button class="list-row" type="button" ${mine(s) ? `data-act="edit-shift" data-id="${s.id}"` : ""}>
         <span class="a">${esc(personName(s.personId))}</span><span class="b">${hrs(s.hours)}</span>
         <span class="c">${fmtShort(s.date)}${s.job ? " · " + esc(s.job) : ""}${s.location ? " · " + esc(s.location) : ""} ${unsyncedTag("shifts", s.id)}${approvalPill(s) ? ` ${approvalPill(s)}` : ""}</span><span class="d">${money(shiftPay(s).amount)}</span>
       </button>`).join("")}
-      <div class="list-foot"><span>${hrs(th)}${hWait ? `<small>+ ${hrs(hWait)} waiting</small>` : ""}</span><span>${money(tv)}</span></div>
+      <div class="list-foot"><span>${hrs(th)}${hWait ? `<small>+ ${hrs(hWait)} in attesa</small>` : ""}</span><span>${money(tv)}</span></div>
     </div>`;
   }
 
@@ -506,12 +509,12 @@
   }
   function shot(r) {
     const local = localPhotos.get(r.id);
-    const waiting = local && !local.uploaded ? `<span class="pill wait flag">Photo not uploaded yet</span>` : "";
-    if (!r.hasPhoto) return `<span class="ph">${ICON.receipt}No photo</span>`;
-    if (r.photoType === "application/pdf") return `<span class="ph">${ICON.doc}PDF receipt</span>${waiting}`;
+    const waiting = local && !local.uploaded ? `<span class="pill wait flag">Foto non ancora caricata</span>` : "";
+    if (!r.hasPhoto) return `<span class="ph">${ICON.receipt}Nessuna foto</span>`;
+    if (r.photoType === "application/pdf") return `<span class="ph">${ICON.doc}Ricevuta PDF</span>${waiting}`;
     const src = photoSrc(r);
-    if (!src) return `<span class="ph">${ICON.cam}Photo on another phone, not uploaded yet</span>`;
-    return `<img src="${esc(src)}" alt="Receipt: ${esc(r.description || "photo")}" loading="lazy">${waiting}`;
+    if (!src) return `<span class="ph">${ICON.cam}Foto su un altro telefono, non ancora caricata</span>`;
+    return `<img src="${esc(src)}" alt="Ricevuta: ${esc(r.description || "foto")}" loading="lazy">${waiting}`;
   }
 
   function renderReceipts() {
@@ -519,20 +522,20 @@
     const rows = receiptsShown();
     if (!rows.length) {
       el.innerHTML = ui.rStatus === "pending"
-        ? empty("Nothing waiting to be paid back", "When someone pays for a taxi, a meal or supplies on a job, photograph the receipt here. It's added to what they're owed.", state.people.length ? "add-receipt" : null, "Photograph a receipt")
-        : empty("No receipts here", "Receipts appear here once they're added.");
+        ? empty("Niente da rimborsare", "Quando qualcuno paga un taxi, un pasto o del materiale per un lavoro, fotografa qui la ricevuta. Viene aggiunta a quanto gli è dovuto.", state.people.length ? "add-receipt" : null, "Fotografa una ricevuta")
+        : empty("Nessuna ricevuta qui", "Le ricevute compaiono qui una volta aggiunte.");
       return;
     }
     const total = rows.reduce((a, r) => a + (Number(r.amount) || 0), 0);
     const byCat = new Map();
     for (const r of rows) byCat.set(catOf(r), (byCat.get(catOf(r)) || 0) + (Number(r.amount) || 0));
-    el.innerHTML = `<p class="totals-line">${rows.length} ${rows.length === 1 ? "receipt" : "receipts"} · <span class="mono">${money(total)}</span></p>
-      ${byCat.size > 1 || ui.rCat ? `<div class="cat-totals" aria-label="Totals by category">${CATS.filter(([k]) => byCat.has(k)).map(([k, l]) => `<span class="cat-total"><span class="cat c-${k}">${esc(l)}</span><span class="mono">${money(byCat.get(k))}</span></span>`).join("")}</div>` : ""}
+    el.innerHTML = `<p class="totals-line">${rows.length} ${rows.length === 1 ? "ricevuta" : "ricevute"} · <span class="mono">${money(total)}</span></p>
+      ${byCat.size > 1 || ui.rCat ? `<div class="cat-totals" aria-label="Totali per categoria">${CATS.filter(([k]) => byCat.has(k)).map(([k, l]) => `<span class="cat-total"><span class="cat c-${k}">${esc(l)}</span><span class="mono">${money(byCat.get(k))}</span></span>`).join("")}</div>` : ""}
       <div class="rgrid">${rows.map((r) => `<article class="receipt">
-        <button class="shot" type="button" data-act="view-receipt" data-id="${r.id}" aria-label="Open receipt">${shot(r)}</button>
+        <button class="shot" type="button" data-act="view-receipt" data-id="${r.id}" aria-label="Apri ricevuta">${shot(r)}</button>
         <div class="meta">
-          <div class="amt"><b>${money(r.amount)}</b>${r.status === "reimbursed" ? `<span class="pill paid">Reimbursed</span>` : `<span class="pill owed">To reimburse</span>`}</div>
-          <div class="what">${esc(r.description || "No description")}</div>
+          <div class="amt"><b>${money(r.amount)}</b>${r.status === "reimbursed" ? `<span class="pill paid">Rimborsato</span>` : `<span class="pill owed">Da rimborsare</span>`}</div>
+          <div class="what">${esc(r.description || "Nessuna descrizione")}</div>
           <div class="cat-line"><span class="cat c-${catOf(r)}">${esc(catLabel(catOf(r)))}</span></div>
           <div class="by">${[esc(personName(r.personId)), fmtShort(r.date)].filter(Boolean).join(" · ")} ${unsyncedTag("receipts", r.id)}</div>
         </div>
@@ -544,26 +547,26 @@
     const rows = state.payments.filter((p) => !ui.pPerson || p.personId === ui.pPerson)
       .sort((a, b) => (b.date || "").localeCompare(a.date || "") || (b.createdAt || 0) - (a.createdAt || 0));
     if (!rows.length) {
-      el.innerHTML = empty("No payments recorded", "Record each payment as it goes out, so the board shows who's been paid and what's still owed.", isAdmin() && state.people.length ? "add-payment" : null, "Record a payment");
+      el.innerHTML = empty("Nessun pagamento registrato", "Registra ogni pagamento quando parte, così il team mostra chi è stato pagato e cosa resta da pagare.", isAdmin() && state.people.length ? "add-payment" : null, "Registra un pagamento");
       return;
     }
     let total = 0;
     el.innerHTML = `<div class="tablebox"><table>
-      <thead><tr><th>Date</th><th>Paid to</th><th>Method · note</th><th class="n">Wages</th><th class="n">Receipts</th><th class="n">Total</th><th></th></tr></thead>
+      <thead><tr><th>Data</th><th>Pagato a</th><th>Metodo · nota</th><th class="n">Compensi</th><th class="n">Ricevute</th><th class="n">Totale</th><th></th></tr></thead>
       <tbody>${rows.map((p) => {
         const rec = Number(p.receiptsAmount) || 0, t = (Number(p.amount) || 0) + rec; total += t;
         const n = p.receiptIds?.length || 0;
         return `<tr>
           <td>${fmtShort(p.date)}${unsyncedTag("payments", p.id) ? `<span class="sub">${unsyncedTag("payments", p.id)}</span>` : ""}</td>
           <td class="who">${esc(personName(p.personId))}</td>
-          <td>${esc(p.method || "")}${p.note ? `<span class="sub">${esc(p.note)}</span>` : ""}</td>
+          <td>${esc(methodLabel(p.method))}${p.note ? `<span class="sub">${esc(p.note)}</span>` : ""}</td>
           <td class="n">${money(p.amount)}</td>
-          <td class="n">${rec ? `${money(rec)}<span class="sub">${n} receipt${n === 1 ? "" : "s"}</span>` : `<span class="muted">—</span>`}</td>
+          <td class="n">${rec ? `${money(rec)}<span class="sub">${n} ${n === 1 ? "ricevuta" : "ricevute"}</span>` : `<span class="muted">—</span>`}</td>
           <td class="n">${money(t)}</td>
-          <td class="n">${isAdmin() ? `<button class="btn quiet sm danger" type="button" data-act="del-payment" data-id="${p.id}">Delete</button>` : ""}</td>
+          <td class="n">${isAdmin() ? `<button class="btn quiet sm danger" type="button" data-act="del-payment" data-id="${p.id}">Elimina</button>` : ""}</td>
         </tr>`;
       }).join("")}</tbody>
-      <tfoot><tr><td colspan="5">${rows.length} ${rows.length === 1 ? "payment" : "payments"}</td><td class="n">${money(total)}</td><td></td></tr></tfoot>
+      <tfoot><tr><td colspan="5">${rows.length} ${rows.length === 1 ? "pagamento" : "pagamenti"}</td><td class="n">${money(total)}</td><td></td></tr></tfoot>
     </table></div>`;
   }
 
@@ -572,7 +575,7 @@
   async function loadAccounts() {
     if (!isAdmin()) return;
     try { accounts = (await api("/api/users", { method: "GET" })).users; accountsErr = null; }
-    catch (e) { accountsErr = e.status ? e.msg : "Connect to the internet to manage logins."; }
+    catch (e) { accountsErr = e.status ? e.msg : "Connettiti a internet per gestire gli accessi."; }
     render();
   }
   let installEvt = null;
@@ -583,56 +586,56 @@
     const ob = await idb.count("outbox");
     const ph = (await idb.all("photos")).filter((p) => !p.uploaded).length;
     const el = $("#settings");
-    const installPanel = standalone() ? `<p>Installed on this device. It opens full-screen and works without signal.</p>`
-      : installEvt ? `<p>Install it on this device to open it like an app and use it without signal.</p><div><button class="btn primary" type="button" id="install-btn">Install app</button></div>`
-      : isIOS ? `<p>On iPhone or iPad: tap the <b>Share</b> button in Safari, then <b>Add to Home Screen</b>. It will then open like an app and work without signal.</p>`
-      : `<p>In Chrome or Edge, use the install icon in the address bar, or the menu's <b>Install app</b> / <b>Add to Home screen</b>. On iPhone use Safari's <b>Share → Add to Home Screen</b>.</p>`;
+    const installPanel = standalone() ? `<p>Installata su questo dispositivo. Si apre a schermo intero e funziona anche senza campo.</p>`
+      : installEvt ? `<p>Installala su questo dispositivo per aprirla come un'app e usarla anche senza campo.</p><div><button class="btn primary" type="button" id="install-btn">Installa app</button></div>`
+      : isIOS ? `<p>Su iPhone o iPad: in Safari tocca <b>Condividi</b>, poi <b>Aggiungi alla schermata Home</b>. Si aprirà come un'app e funzionerà anche senza campo.</p>`
+      : `<p>In Chrome o Edge usa l'icona di installazione nella barra degli indirizzi, oppure dal menu <b>Installa app</b> / <b>Aggiungi a schermata Home</b>. Su iPhone usa <b>Condividi → Aggiungi alla schermata Home</b> in Safari.</p>`;
     const ag = document.activeElement?.id === "agency" ? document.activeElement : null;
     const agencyDraft = ag ? [ag.value, ag.selectionStart ?? ag.value.length] : null; // keep typing across a background redraw
     el.innerHTML = `
       <section class="panel">
-        <h2>Your account</h2>
-        <dl class="kv"><dt>Name</dt><dd>${esc(me.name)}</dd><dt>Username</dt><dd class="mono">${esc(me.username)}</dd><dt>Access</dt><dd>${isAdmin() ? "Admin" : "Staff"}</dd>
-          <dt>On the board as</dt><dd>${myPerson() ? `${esc(myPerson().name)} · <a href="#me">My page</a>` : `<span class="muted">Not linked${isAdmin() ? " · link it under Team logins" : " · ask an admin to link your login"}</span>`}</dd></dl>
-        <div class="sheet-foot"><button class="btn" type="button" data-act="password">Change password</button><button class="btn danger" type="button" id="logout-btn">Sign out</button></div>
+        <h2>Il tuo account</h2>
+        <dl class="kv"><dt>Nome</dt><dd>${esc(me.name)}</dd><dt>Nome utente</dt><dd class="mono">${esc(me.username)}</dd><dt>Accesso</dt><dd>${isAdmin() ? "Amministratore" : "Staff"}</dd>
+          <dt>Nel team come</dt><dd>${myPerson() ? `${esc(myPerson().name)} · <a href="#me">La mia pagina</a>` : `<span class="muted">Non collegato${isAdmin() ? " · collegalo in Accessi del team" : " · chiedi a un amministratore di collegare il tuo accesso"}</span>`}</dd></dl>
+        <div class="sheet-foot"><button class="btn" type="button" data-act="password">Cambia password</button><button class="btn danger" type="button" id="logout-btn">Esci</button></div>
       </section>
       <section class="panel">
-        <h2>This device</h2>
+        <h2>Questo dispositivo</h2>
         <dl class="kv">
-          <dt>Connection</dt><dd>${sync.online ? "Online" : "Offline"}</dd>
-          <dt>Waiting to send</dt><dd>${ob ? `${ob} change${ob === 1 ? "" : "s"}` : "Nothing"}${ph ? ` · ${ph} photo${ph === 1 ? "" : "s"}` : ""}</dd>
-          <dt>Last synced</dt><dd>${sync.last ? ago(sync.last) : "Not yet"}</dd>
+          <dt>Connessione</dt><dd>${sync.online ? "Online" : "Offline"}</dd>
+          <dt>Da inviare</dt><dd>${ob ? `${ob} ${ob === 1 ? "modifica" : "modifiche"}` : "Niente"}${ph ? ` · ${ph} foto` : ""}</dd>
+          <dt>Ultima sincronizzazione</dt><dd>${sync.last ? ago(sync.last) : "Non ancora"}</dd>
         </dl>
-        <div><button class="btn" type="button" data-act="sync-now">Sync now</button></div>
+        <div><button class="btn" type="button" data-act="sync-now">Sincronizza ora</button></div>
       </section>
-      <section class="panel"><h2>Use it as an app</h2>${installPanel}</section>
+      <section class="panel"><h2>Usala come app</h2>${installPanel}</section>
       ${isAdmin() ? `<section class="panel">
-        <h2>Currency</h2>
-        <div class="field"><label for="currency">Amounts are shown in</label>
-          <select id="currency">${[["EUR", "Euro (€)"], ["GBP", "Pound (£)"], ["USD", "US dollar ($)"], ["CHF", "Swiss franc (CHF)"]].map(([v, l]) => `<option value="${v}" ${state.settings.currency === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>
+        <h2>Valuta</h2>
+        <div class="field"><label for="currency">Importi mostrati in</label>
+          <select id="currency">${[["EUR", "Euro (€)"], ["GBP", "Sterlina (£)"], ["USD", "Dollaro USA ($)"], ["CHF", "Franco svizzero (CHF)"]].map(([v, l]) => `<option value="${v}" ${state.settings.currency === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>
       </section>
       <section class="panel">
-        <h2>Statements</h2>
-        <div class="field"><label for="agency">Agency name</label><input id="agency" maxlength="80" autocomplete="organization" placeholder="Talent &amp; Crew" value="${esc(state.settings.agencyName || "")}"><span class="hint">Printed at the top of every statement.</span></div>
+        <h2>Estratti conto</h2>
+        <div class="field"><label for="agency">Nome dell'agenzia</label><input id="agency" maxlength="80" autocomplete="organization" placeholder="Talent &amp; Crew" value="${esc(state.settings.agencyName || "")}"><span class="hint">Stampato in cima a ogni estratto conto.</span></div>
       </section>
       <section class="panel wide">
-        <div class="view-head"><div><h2>Team logins</h2><p>Staff can log hours, add receipts and update locations. Admins also manage people, rates and payments.</p></div>
-          <div class="view-actions"><button class="btn primary" type="button" data-act="add-account">Add login</button></div></div>
-        <div id="acct-list">${accountsErr ? `<p class="err">${esc(accountsErr)}</p>` : !accounts ? `<p class="muted">Loading…</p>` : accounts.map((a) => `<div class="acct">
-          <div><div class="nm">${esc(a.name)} ${a.disabled ? `<span class="pill over">Disabled</span>` : ""}</div><div class="un">${esc(a.username)} · ${a.role === "admin" ? "Admin" : "Staff"}</div></div>
+        <div class="view-head"><div><h2>Accessi del team</h2><p>Lo staff può registrare ore, aggiungere ricevute e aggiornare posizioni. Gli amministratori gestiscono anche persone, tariffe e pagamenti.</p></div>
+          <div class="view-actions"><button class="btn primary" type="button" data-act="add-account">Aggiungi accesso</button></div></div>
+        <div id="acct-list">${accountsErr ? `<p class="err">${esc(accountsErr)}</p>` : !accounts ? `<p class="muted">Caricamento…</p>` : accounts.map((a) => `<div class="acct">
+          <div><div class="nm">${esc(a.name)} ${a.disabled ? `<span class="pill over">Disattivato</span>` : ""}</div><div class="un">${esc(a.username)} · ${a.role === "admin" ? "Amministratore" : "Staff"}</div></div>
           <div class="ctl">
-            <label class="link-sel"><span>Is</span><select data-link="${a.id}" aria-label="Person on the board for ${esc(a.name)}"><option value="">Not on the board</option>${state.people.slice().sort(byName).map((p) => `<option value="${p.id}" ${a.personId === p.id ? "selected" : ""}>${esc(p.name)}</option>`).join("")}</select></label>
-            <button class="btn sm" type="button" data-act="reset-pw" data-id="${a.id}">Reset password</button>
-            ${a.id === me.id ? "" : `<button class="btn sm" type="button" data-act="toggle-role" data-id="${a.id}">${a.role === "admin" ? "Make staff" : "Make admin"}</button>
-            <button class="btn sm ${a.disabled ? "" : "danger"}" type="button" data-act="toggle-disabled" data-id="${a.id}">${a.disabled ? "Enable" : "Disable"}</button>`}
+            <label class="link-sel"><span>È</span><select data-link="${a.id}" aria-label="Persona del team per ${esc(a.name)}"><option value="">Non nel team</option>${state.people.slice().sort(byName).map((p) => `<option value="${p.id}" ${a.personId === p.id ? "selected" : ""}>${esc(p.name)}</option>`).join("")}</select></label>
+            <button class="btn sm" type="button" data-act="reset-pw" data-id="${a.id}">Reimposta password</button>
+            ${a.id === me.id ? "" : `<button class="btn sm" type="button" data-act="toggle-role" data-id="${a.id}">${a.role === "admin" ? "Rendi staff" : "Rendi amministratore"}</button>
+            <button class="btn sm ${a.disabled ? "" : "danger"}" type="button" data-act="toggle-disabled" data-id="${a.id}">${a.disabled ? "Riattiva" : "Disattiva"}</button>`}
           </div></div>`).join("")}</div>
       </section>
       ${placesPanel()}
       <section class="panel wide" id="activity">${activityShell()}</section>` : ""}`;
     $("#install-btn")?.addEventListener("click", async () => { installEvt.prompt(); await installEvt.userChoice.catch(() => {}); installEvt = null; renderSettings(); });
-    $("#currency")?.addEventListener("change", (e) => save("settings", { ...state.settings, id: "main", currency: e.target.value }).then(() => toast("Currency saved")));
+    $("#currency")?.addEventListener("change", (e) => save("settings", { ...state.settings, id: "main", currency: e.target.value }).then(() => toast("Valuta salvata")));
     if (agencyDraft && $("#agency")) { const a = $("#agency"); a.value = agencyDraft[0]; a.focus(); a.setSelectionRange(agencyDraft[1], agencyDraft[1]); }
-    $("#agency")?.addEventListener("change", (e) => save("settings", { ...state.settings, id: "main", agencyName: e.target.value.trim().slice(0, 80) }).then(() => toast("Agency name saved")));
+    $("#agency")?.addEventListener("change", (e) => save("settings", { ...state.settings, id: "main", agencyName: e.target.value.trim().slice(0, 80) }).then(() => toast("Nome dell'agenzia salvato")));
     $("#logout-btn").addEventListener("click", (e) => logout(e.currentTarget, ob + ph));
     if (isAdmin()) { bindSettingsExtras(); paintActivity(); }
   }
@@ -650,35 +653,35 @@
     const recs = state.receipts.filter((s) => s.personId === id).sort(sortD);
     $("#dt-body").innerHTML = `
       <dl class="kv">
-        <dt>Role</dt><dd>${roleLabel(p.role)}${p.speciality ? " · " + esc(p.speciality) : ""}</dd>
-        <dt>Pay</dt><dd class="mono">${esc(termsText(payTerms(p)))}</dd>
-        <dt>Location</dt><dd>${p.location ? `${esc(p.location)} <span class="muted">· ${ago(p.locationAt)}</span>` : `<span class="muted">Unknown</span>`}</dd>
-        ${p.phone ? `<dt>Phone</dt><dd class="mono">${esc(p.phone)}</dd>` : ""}
+        <dt>Ruolo</dt><dd>${roleLabel(p.role)}${p.speciality ? " · " + esc(p.speciality) : ""}</dd>
+        <dt>Paga</dt><dd class="mono">${esc(termsText(payTerms(p)))}</dd>
+        <dt>Posizione</dt><dd>${p.location ? `${esc(p.location)} <span class="muted">· ${ago(p.locationAt)}</span>` : `<span class="muted">Sconosciuta</span>`}</dd>
+        ${p.phone ? `<dt>Telefono</dt><dd class="mono">${esc(p.phone)}</dd>` : ""}
       </dl>
       <div class="detail-figs">
-        <div><span class="eyebrow">Earned</span><span class="v">${money(b.earned)}</span></div>
-        <div><span class="eyebrow">Wages paid</span><span class="v">${money(b.paid)}</span></div>
-        <div><span class="eyebrow">Receipts owed</span><span class="v">${money(b.rec)}</span></div>
-        <div><span class="eyebrow">Owed now</span><span class="v ${b.owed > 0.004 ? "owed" : "paid"}">${money(b.owed)}</span></div>
+        <div><span class="eyebrow">Guadagnato</span><span class="v">${money(b.earned)}</span></div>
+        <div><span class="eyebrow">Compensi pagati</span><span class="v">${money(b.paid)}</span></div>
+        <div><span class="eyebrow">Ricevute da rimborsare</span><span class="v">${money(b.rec)}</span></div>
+        <div><span class="eyebrow">Da pagare ora</span><span class="v ${b.owed > 0.004 ? "owed" : "paid"}">${money(b.owed)}</span></div>
       </div>
       <div class="sheet-foot">
-        <button class="btn sm" type="button" data-act="add-shift" data-id="${id}">${ICON.clock}Log hours</button>
-        <button class="btn sm" type="button" data-act="add-receipt" data-id="${id}">${ICON.cam}Add receipt</button>
-        <button class="btn sm" type="button" data-act="statement" data-id="${id}">${ICON.doc}Statement</button>
-        ${isAdmin() ? `<button class="btn sm primary" type="button" data-act="add-payment" data-id="${id}" ${b.owed > 0.004 ? "" : "disabled"}>${ICON.card}Record payment</button>` : ""}
+        <button class="btn sm" type="button" data-act="add-shift" data-id="${id}">${ICON.clock}Registra ore</button>
+        <button class="btn sm" type="button" data-act="add-receipt" data-id="${id}">${ICON.cam}Aggiungi ricevuta</button>
+        <button class="btn sm" type="button" data-act="statement" data-id="${id}">${ICON.doc}Estratto conto</button>
+        ${isAdmin() ? `<button class="btn sm primary" type="button" data-act="add-payment" data-id="${id}" ${b.owed > 0.004 ? "" : "disabled"}>${ICON.card}Registra pagamento</button>` : ""}
       </div>
-      <h4 class="eyebrow">Hours · ${hrs(b.hAll)} all time${b.hPend ? ` · + ${hrs(b.hPend)} waiting for approval` : ""}</h4>
-      ${shifts.length ? `<div class="tablebox"><table><thead><tr><th>Date</th><th>Job · location</th><th class="n">Hours</th><th class="n">Earned</th></tr></thead><tbody>
+      <h4 class="eyebrow">Ore · ${hrs(b.hAll)} in totale${b.hPend ? ` · + ${hrs(b.hPend)} in attesa di approvazione` : ""}</h4>
+      ${shifts.length ? `<div class="tablebox"><table><thead><tr><th>Data</th><th>Lavoro · posizione</th><th class="n">Ore</th><th class="n">Guadagnato</th></tr></thead><tbody>
         ${shifts.slice(0, 60).map((s) => `<tr><td>${fmtShort(s.date)}${approvalPill(s) ? `<span class="sub">${approvalPill(s)}</span>` : ""}</td><td>${esc(s.job || "—")}${s.location ? `<span class="sub">${esc(s.location)}</span>` : ""}</td><td class="n">${hrs(s.hours)}${otSub(s)}</td><td class="n">${money(shiftPay(s).amount)}</td></tr>`).join("")}
-      </tbody></table></div>` : `<p class="muted">No hours logged.</p>`}
-      <h4 class="eyebrow">Receipts</h4>
-      ${recs.length ? `<div class="tablebox"><table><thead><tr><th>Date</th><th>For</th><th class="n">Amount</th><th>Status</th></tr></thead><tbody>
-        ${recs.map((r) => `<tr><td>${fmtShort(r.date)}</td><td><button class="btn quiet sm" type="button" data-act="view-receipt" data-id="${r.id}">${esc(r.description || "Receipt")}</button></td><td class="n">${money(r.amount)}</td><td>${r.status === "reimbursed" ? `<span class="pill paid">Reimbursed</span>` : `<span class="pill owed">To reimburse</span>`}</td></tr>`).join("")}
-      </tbody></table></div>` : `<p class="muted">No receipts.</p>`}
-      <h4 class="eyebrow">Payments</h4>
-      ${pays.length ? `<div class="tablebox"><table><thead><tr><th>Date</th><th>Method</th><th class="n">Wages</th><th class="n">Receipts</th></tr></thead><tbody>
-        ${pays.map((x) => `<tr><td>${fmtShort(x.date)}</td><td>${esc(x.method || "")}${x.note ? `<span class="sub">${esc(x.note)}</span>` : ""}</td><td class="n">${money(x.amount)}</td><td class="n">${x.receiptsAmount ? money(x.receiptsAmount) : "—"}</td></tr>`).join("")}
-      </tbody></table></div>` : `<p class="muted">No payments yet.</p>`}`;
+      </tbody></table></div>` : `<p class="muted">Nessuna ora registrata.</p>`}
+      <h4 class="eyebrow">Ricevute</h4>
+      ${recs.length ? `<div class="tablebox"><table><thead><tr><th>Data</th><th>Per</th><th class="n">Importo</th><th>Stato</th></tr></thead><tbody>
+        ${recs.map((r) => `<tr><td>${fmtShort(r.date)}</td><td><button class="btn quiet sm" type="button" data-act="view-receipt" data-id="${r.id}">${esc(r.description || "Ricevuta")}</button></td><td class="n">${money(r.amount)}</td><td>${r.status === "reimbursed" ? `<span class="pill paid">Rimborsato</span>` : `<span class="pill owed">Da rimborsare</span>`}</td></tr>`).join("")}
+      </tbody></table></div>` : `<p class="muted">Nessuna ricevuta.</p>`}
+      <h4 class="eyebrow">Pagamenti</h4>
+      ${pays.length ? `<div class="tablebox"><table><thead><tr><th>Data</th><th>Metodo</th><th class="n">Compensi</th><th class="n">Ricevute</th></tr></thead><tbody>
+        ${pays.map((x) => `<tr><td>${fmtShort(x.date)}</td><td>${esc(methodLabel(x.method))}${x.note ? `<span class="sub">${esc(x.note)}</span>` : ""}</td><td class="n">${money(x.amount)}</td><td class="n">${x.receiptsAmount ? money(x.receiptsAmount) : "—"}</td></tr>`).join("")}
+      </tbody></table></div>` : `<p class="muted">Ancora nessun pagamento.</p>`}`;
   }
 
   // ---------- Sync indicator ----------
@@ -686,23 +689,23 @@
     const el = $("#sync"), txt = $("#sync-txt"), banner = $("#banner");
     if (!el || !me) return;
     const n = pendingKeys.size + [...localPhotos.values()].filter((p) => !p.uploaded).length;
-    let st = "ok", label = sync.last ? `Synced ${ago(sync.last)}` : "Up to date";
-    if (sync.busy) { st = "syncing"; label = "Syncing…"; }
-    else if (sync.authLost) { st = "error"; label = "Sign in to sync"; }
-    else if (!sync.online) { st = "offline"; label = n ? `Offline · ${n} saved here` : "Offline"; }
-    else if (sync.error) { st = "error"; label = "Sync problem"; }
-    else if (n) { st = "syncing"; label = `${n} waiting to send`; }
+    let st = "ok", label = sync.last ? `Sincronizzato ${ago(sync.last)}` : "Aggiornato";
+    if (sync.busy) { st = "syncing"; label = "Sincronizzazione…"; }
+    else if (sync.authLost) { st = "error"; label = "Accedi per sincronizzare"; }
+    else if (!sync.online) { st = "offline"; label = n ? `Offline · ${n} ${n === 1 ? "salvata" : "salvate"} qui` : "Offline"; }
+    else if (sync.error) { st = "error"; label = "Problema di sincronizzazione"; }
+    else if (n) { st = "syncing"; label = `${n} da inviare`; }
     el.dataset.state = st; txt.textContent = label;
-    el.title = sync.error || (st === "offline" ? "No connection. Everything you add is kept on this device and sent when you're back online." : "Sync now");
+    el.title = sync.error || (st === "offline" ? "Nessuna connessione. Tutto ciò che aggiungi resta su questo dispositivo e viene inviato quando torni online." : "Sincronizza ora");
 
     const bt = $("#banner-btn");
     if (sync.authLost) {
       banner.hidden = false; banner.className = "banner risk";
-      $("#banner-txt").textContent = n ? `Your sign-in has expired. Sign in again to send the ${n} change${n === 1 ? "" : "s"} saved on this device.` : "Your sign-in has expired. Sign in again to get the latest.";
-      bt.hidden = false; bt.textContent = "Sign in"; bt.onclick = () => showAuth("login", true);
+      $("#banner-txt").textContent = n ? (n === 1 ? "Il tuo accesso è scaduto. Accedi di nuovo per inviare la modifica salvata su questo dispositivo." : `Il tuo accesso è scaduto. Accedi di nuovo per inviare le ${n} modifiche salvate su questo dispositivo.`) : "Il tuo accesso è scaduto. Accedi di nuovo per vedere gli ultimi aggiornamenti.";
+      bt.hidden = false; bt.textContent = "Accedi"; bt.onclick = () => showAuth("login", true);
     } else if (!sync.online && n) {
       banner.hidden = false; banner.className = "banner";
-      $("#banner-txt").textContent = `You're offline. ${n} change${n === 1 ? " is" : "s are"} saved on this device and will send when you're back online.`;
+      $("#banner-txt").textContent = (n === 1 ? "Sei offline. 1 modifica è salvata su questo dispositivo e verrà inviata quando torni online." : `Sei offline. ${n} modifiche sono salvate su questo dispositivo e verranno inviate quando torni online.`);
       bt.hidden = true;
     } else banner.hidden = true;
   }
@@ -721,14 +724,14 @@
   }
   function needPeople() {
     if (state.people.length) return false;
-    if (isAdmin()) { toast("Add a person first"); openPerson(); } else toast("An admin needs to add the team first.");
+    if (isAdmin()) { toast("Prima aggiungi una persona"); openPerson(); } else toast("Prima un amministratore deve aggiungere il team.");
     return true;
   }
   async function attempt(form, errEl, fn) {
     const btn = form.querySelector('[type="submit"]');
     btn.disabled = true; showErr(errEl, "");
     try { await fn(); }
-    catch (e) { console.error(e); showErr(errEl, e.msg || "Couldn't save on this device. Free up some storage and try again."); }
+    catch (e) { console.error(e); showErr(errEl, e.msg || "Impossibile salvare su questo dispositivo. Libera un po' di spazio e riprova."); }
     finally { btn.disabled = false; }
   }
   // Destructive buttons ask twice instead of using a popup.
@@ -742,12 +745,12 @@
   // Quick-add
   function openQuick() {
     const opts = [
-      ["add-shift", ICON.clock, "Log hours", "Call, wrap and job"],
-      ["add-receipt", ICON.cam, "Receipt", "Photograph an expense"],
-      ["loc", ICON.pin, "Check in", "Update a location"],
+      ["add-shift", ICON.clock, "Registra ore", "Convocazione, fine e lavoro"],
+      ["add-receipt", ICON.cam, "Ricevuta", "Fotografa una spesa"],
+      ["loc", ICON.pin, "Posizione", "Aggiorna una posizione"],
     ];
-    if (isAdmin()) opts.push(["add-payment", ICON.card, "Payment", "Record money paid"]);
-    else opts.push(["goto-hours", ICON.clock, "My hours", "See what's logged"]);
+    if (isAdmin()) opts.push(["add-payment", ICON.card, "Pagamento", "Registra un pagamento"]);
+    else opts.push(["goto-hours", ICON.clock, "Le mie ore", "Vedi cosa è registrato"]);
     const self = staffMe() ? myPerson().id : "";
     $("#quick").innerHTML = opts.map(([a, i, t, s]) => `<button type="button" data-act="${a}"${self && ["add-shift", "add-receipt", "loc"].includes(a) ? ` data-id="${self}"` : ""}>${i}<div><b>${t}</b><span>${s}</span></div></button>`).join("");
     openSheet("#d-quick");
@@ -760,18 +763,18 @@
     const rate = day && v("#pf-rate") === "" ? 0 : n("#pf-rate");
     const otAfter = v("#pf-otafter") === "" ? 0 : n("#pf-otafter");
     const otMult = v("#pf-otmult") === "" ? 1.5 : n("#pf-otmult");
-    if (!(rate >= 0)) return day ? "The hourly rate can't be negative." : "Enter an hourly rate. Use 0 for unpaid roles.";
-    if (!(otAfter >= 0 && otAfter < 24)) return "Overtime starts after 0 to 24 hours. Leave it empty for no overtime.";
-    if (otAfter && !(otMult >= 1 && otMult <= 5)) return "Overtime pays between 1× and 5× the hourly rate.";
+    if (!(rate >= 0)) return day ? "La tariffa oraria non può essere negativa." : "Inserisci una tariffa oraria. Usa 0 per i ruoli non retribuiti.";
+    if (!(otAfter >= 0 && otAfter < 24)) return "Lo straordinario parte dopo un numero di ore tra 0 e 24. Lascia vuoto per nessuno straordinario.";
+    if (otAfter && !(otMult >= 1 && otMult <= 5)) return "Lo straordinario paga tra 1× e 5× la tariffa oraria.";
     const t = { payType: day ? "day" : "hourly", rate: round2(rate), dayRate: 0, halfDayRate: 0, halfDayUnder: 0, otAfter: round2(otAfter), otMult: otMult >= 1 && otMult <= 5 ? round2(otMult) : 1.5 };
     if (!day) return t;
     const dr = n("#pf-dayrate"), hr = v("#pf-halfrate") === "" ? 0 : n("#pf-halfrate"), hu = v("#pf-halfunder") === "" ? 0 : n("#pf-halfunder");
-    if (!(dr > 0)) return "Enter the day rate.";
+    if (!(dr > 0)) return "Inserisci la tariffa giornaliera.";
     if (hr || hu) {
-      if (!(hr > 0)) return "Enter the half-day rate, or clear the hours under it.";
-      if (!(hu > 0 && hu <= 24)) return "Enter how many hours count as a half day.";
+      if (!(hr > 0)) return "Inserisci la tariffa di mezza giornata, oppure cancella le ore sotto cui si applica.";
+      if (!(hu > 0 && hu <= 24)) return "Inserisci quante ore valgono come mezza giornata.";
     }
-    if (otAfter && !(rate > 0)) return "Enter the hourly rate overtime is paid at.";
+    if (otAfter && !(rate > 0)) return "Inserisci la tariffa oraria con cui si paga lo straordinario.";
     return { ...t, dayRate: round2(dr), halfDayRate: round2(hr), halfDayUnder: round2(hu) };
   }
   function fillPersonTerms(p) {
@@ -785,10 +788,10 @@
   function personTermsUI() {
     const day = $("#pf-paytype").value === "day";
     $("#pf-day-wrap").hidden = $("#pf-half-wrap").hidden = !day;
-    $('label[for="pf-rate"]').textContent = day ? "Hourly rate for overtime" : "Hourly rate";
-    $("#pf-rate").placeholder = day ? "Only for overtime" : "";
+    $('label[for="pf-rate"]').textContent = day ? "Tariffa oraria per lo straordinario" : "Tariffa oraria";
+    $("#pf-rate").placeholder = day ? "Solo per lo straordinario" : "";
     const t = personFormTerms();
-    $("#pf-terms").textContent = typeof t === "string" ? "" : `Pays ${termsText(t)}. Each shift keeps the terms it was logged under.`;
+    $("#pf-terms").textContent = typeof t === "string" ? "" : `Paga ${termsText(t)}. Ogni turno mantiene le condizioni con cui è stato registrato.`;
   }
   $("#d-person form").addEventListener("input", personTermsUI);
   $("#pf-paytype").addEventListener("change", personTermsUI);
@@ -799,11 +802,11 @@
     if (!isAdmin()) return;
     editingPerson = id || null;
     const p = state.people.find((x) => x.id === id) || {};
-    $("#pf-title").textContent = id ? `Edit ${p.name}` : "Add person";
+    $("#pf-title").textContent = id ? `Modifica ${p.name}` : "Aggiungi persona";
     $("#pf-name").value = p.name || ""; $("#pf-role").value = p.role || "model"; $("#pf-rate").value = p.rate ?? "";
     fillPersonTerms(p);
     $("#pf-spec").value = p.speciality || ""; $("#pf-loc").value = p.location || ""; $("#pf-phone").value = p.phone || "";
-    $("#pf-del").hidden = !id; disarm($("#pf-del"), "Delete");
+    $("#pf-del").hidden = !id; disarm($("#pf-del"), "Elimina");
     showErr($("#pf-err"), "");
     openSheet("#d-person"); $("#pf-name").focus();
   }
@@ -811,7 +814,7 @@
     e.preventDefault();
     const form = e.currentTarget, err = $("#pf-err");
     const name = $("#pf-name").value.trim();
-    if (!name) return showErr(err, "Enter their name.");
+    if (!name) return showErr(err, "Inserisci il nome.");
     const terms = personFormTerms();
     if (typeof terms === "string") return showErr(err, terms);
     attempt(form, err, async () => {
@@ -820,16 +823,16 @@
       const data = { ...(prev || {}), name, role: $("#pf-role").value, ...terms, speciality: $("#pf-spec").value.trim(), phone: $("#pf-phone").value.trim(), location };
       if (!prev || (prev.location || "") !== location) data.locationAt = Date.now();
       await save("people", data);
-      $("#d-person").close(); toast(prev ? "Saved" : `${name} added to the board`);
+      $("#d-person").close(); toast(prev ? "Salvato" : `${name} aggiunto/a al team`);
     });
   });
   $("#pf-del").addEventListener("click", (e) => {
     const btn = e.currentTarget, id = editingPerson;
     const related = ["shifts", "payments", "receipts"].flatMap((c) => state[c].filter((r) => r.personId === id).map((r) => [c, r]));
-    armed(btn, related.length ? `Delete with ${related.length} records?` : "Tap again to delete", async () => {
+    armed(btn, related.length ? `Eliminare con ${related.length === 1 ? "1 voce" : `${related.length} voci`}?` : "Tocca di nuovo per eliminare", async () => {
       for (const [c, r] of related) await remove(c, r);
       await remove("people", state.people.find((p) => p.id === id));
-      $("#d-person").close(); toast("Deleted");
+      $("#d-person").close(); toast("Eliminato");
     });
   });
 
@@ -840,7 +843,7 @@
     locId = id || null;
     $("#lf-person-wrap").hidden = !!id;
     personOptions($("#lf-person"), id || state.people[0]?.id);
-    const fill = () => { const p = state.people.find((x) => x.id === (locId || $("#lf-person").value)); $("#lf-who").textContent = p ? p.name.split(" ")[0] : "they"; $("#lf-loc").value = p?.location || ""; };
+    const fill = () => { const p = state.people.find((x) => x.id === (locId || $("#lf-person").value)); $("#lf-who").textContent = p ? p.name.split(" ")[0] : "?"; $("#lf-loc").value = p?.location || ""; };
     $("#lf-person").onchange = fill; fill();
     paintPlaces();
     showErr($("#lf-err"), "");
@@ -852,7 +855,7 @@
     attempt(e.currentTarget, $("#lf-err"), async () => {
       const p = state.people.find((x) => x.id === id);
       await save("people", { ...p, location: $("#lf-loc").value.trim(), locationAt: Date.now() });
-      $("#d-loc").close(); toast(`${p.name.split(" ")[0]} checked in`);
+      $("#d-loc").close(); toast(`Posizione di ${p.name.split(" ")[0]} aggiornata`);
     });
   });
 
@@ -872,7 +875,7 @@
   let sfTerms = payTerms();
   function setShiftTerms(t) {
     sfTerms = t;
-    $('label[for="sf-rate"]').textContent = t.payType === "day" ? "Day rate" : "Rate per hour";
+    $('label[for="sf-rate"]').textContent = t.payType === "day" ? "Tariffa giornaliera" : "Tariffa oraria";
     $("#sf-rate").value = t.payType === "day" ? t.dayRate : t.rate;
   }
   function shiftFormTerms() {
@@ -890,7 +893,7 @@
     const s = state.shifts.find((x) => x.id === shiftId) || {};
     personOptions($("#sf-person"), s.personId || personId || ui.hPerson || state.people.slice().sort(byName)[0]?.id);
     const p = state.people.find((x) => x.id === $("#sf-person").value);
-    $("#sf-title").textContent = shiftId ? "Edit hours" : "Log hours";
+    $("#sf-title").textContent = shiftId ? "Modifica ore" : "Registra ore";
     $("#sf-date").value = s.date || isoDay();
     $("#sf-start").value = s.start || ""; $("#sf-end").value = s.end || "";
     $("#sf-hours").value = s.hours ?? "";
@@ -898,7 +901,7 @@
     $("#sf-rate").readOnly = !isAdmin() && !!p; // staff use the agreed rate
     $("#sf-job").value = s.job || "";
     $("#sf-loc").value = shiftId ? s.location || "" : p?.location || "";
-    $("#sf-del").hidden = !shiftId; disarm($("#sf-del"), "Delete");
+    $("#sf-del").hidden = !shiftId; disarm($("#sf-del"), "Elimina");
     showErr($("#sf-err"), ""); shiftCalc();
     jobFillShift(s, shiftId); // booking select; pre-fills when logging from a job
     openSheet("#d-shift");
@@ -917,9 +920,9 @@
     e.preventDefault();
     const err = $("#sf-err");
     const hours = parseFloat($("#sf-hours").value), rate = parseFloat($("#sf-rate").value), date = $("#sf-date").value;
-    if (!date) return showErr(err, "Pick the date of the job.");
-    if (!(hours > 0) || hours > 24) return showErr(err, "Enter between 0.25 and 24 hours, or fill in call and wrap.");
-    if (!(rate >= 0)) return showErr(err, sfTerms.payType === "day" ? "Enter the day rate." : "Enter the hourly rate.");
+    if (!date) return showErr(err, "Scegli la data del lavoro.");
+    if (!(hours > 0) || hours > 24) return showErr(err, "Inserisci tra 0,25 e 24 ore, oppure compila convocazione e fine.");
+    if (!(rate >= 0)) return showErr(err, sfTerms.payType === "day" ? "Inserisci la tariffa giornaliera." : "Inserisci la tariffa oraria.");
     attempt(e.currentTarget, err, async () => {
       const prev = state.shifts.find((x) => x.id === editingShift);
       const personId = $("#sf-person").value, location = $("#sf-loc").value.trim();
@@ -927,14 +930,14 @@
       const p = state.people.find((x) => x.id === personId);
       if (!prev && date === isoDay() && location && p && (p.location || "") !== location) await save("people", { ...p, location, locationAt: Date.now() });
       $("#d-shift").close();
-      toast(prev ? "Hours updated" : `${hrs(hours)} logged for ${personName(personId)}${sync.online ? "" : " · saved on this device"}`);
+      toast(prev ? "Ore aggiornate" : `${hrs(hours)} registrate per ${personName(personId)}${sync.online ? "" : " · salvate su questo dispositivo"}`);
     });
   });
   $("#sf-del").addEventListener("click", (e) => {
     const btn = e.currentTarget;
-    armed(btn, "Tap again to delete", async () => {
+    armed(btn, "Tocca di nuovo per eliminare", async () => {
       await remove("shifts", state.shifts.find((s) => s.id === editingShift));
-      $("#d-shift").close(); toast("Entry deleted");
+      $("#d-shift").close(); toast("Voce eliminata");
     });
   });
 
@@ -946,9 +949,9 @@
     const pv = $("#rf-preview");
     if (!blob) { pv.hidden = true; pv.innerHTML = ""; $("#rf-capture").hidden = false; return; }
     $("#rf-capture").hidden = true; pv.hidden = false;
-    if (blob.type.startsWith("image/")) { pickedUrl = URL.createObjectURL(blob); pv.innerHTML = `<img alt="Receipt preview" src="${pickedUrl}">`; }
+    if (blob.type.startsWith("image/")) { pickedUrl = URL.createObjectURL(blob); pv.innerHTML = `<img alt="Anteprima ricevuta" src="${pickedUrl}">`; }
     else pv.innerHTML = `<div class="pdf">${esc(name || "PDF")}</div>`;
-    pv.insertAdjacentHTML("beforeend", `<button class="btn sm" type="button" id="rf-retake">Retake</button>`);
+    pv.insertAdjacentHTML("beforeend", `<button class="btn sm" type="button" id="rf-retake">Rifai</button>`);
     $("#rf-retake").onclick = () => setPicked(null);
   }
   function openReceipt(personId) {
@@ -979,11 +982,11 @@
   async function onFile(input) {
     const f = input.files?.[0]; input.value = "";
     if (!f) return;
-    if (!/^image\//.test(f.type) && f.type !== "application/pdf") return showErr($("#rf-err"), "Use a photo or a PDF.");
+    if (!/^image\//.test(f.type) && f.type !== "application/pdf") return showErr($("#rf-err"), "Usa una foto o un PDF.");
     showErr($("#rf-err"), "");
     const blob = await shrink(f);
-    if (blob.size > 15 * 1024 * 1024) return showErr($("#rf-err"), "That file is over 15 MB. Take the photo again or pick a smaller file.");
-    if (!["image/jpeg", "image/png", "image/webp", "application/pdf"].includes(blob.type)) return showErr($("#rf-err"), "This photo format can't be read here. Try taking it again, or save it as JPEG.");
+    if (blob.size > 15 * 1024 * 1024) return showErr($("#rf-err"), "Il file supera i 15 MB. Rifai la foto o scegli un file più piccolo.");
+    if (!["image/jpeg", "image/png", "image/webp", "application/pdf"].includes(blob.type)) return showErr($("#rf-err"), "Questo formato di foto non è leggibile qui. Prova a rifarla o salvala come JPEG.");
     setPicked(blob, f.name);
   }
   $("#rf-cam").addEventListener("click", () => $("#rf-cam-in").click());
@@ -994,15 +997,15 @@
     e.preventDefault();
     const err = $("#rf-err");
     const amount = parseFloat($("#rf-amount").value), date = $("#rf-date").value;
-    if (!(amount > 0)) return showErr(err, "Enter the amount on the receipt.");
-    if (!date) return showErr(err, "Pick the date on the receipt.");
+    if (!(amount > 0)) return showErr(err, "Inserisci l'importo della ricevuta.");
+    if (!date) return showErr(err, "Scegli la data della ricevuta.");
     attempt(e.currentTarget, err, async () => {
       const id = uid();
       if (picked) await idb.put("photos", { id, blob: picked, type: picked.type, uploaded: false, savedAt: Date.now() });
       ui.lastCat = $("#rf-cat").value;
       await save("receipts", { id, category: $("#rf-cat").value, personId: $("#rf-person").value, amount: round2(amount), date, description: $("#rf-desc").value.trim(), jobId: $("#rf-job").value || "", status: "pending", hasPhoto: !!picked, photoType: picked?.type || null, photoUploaded: false });
       $("#d-receipt").close(); setPicked(null);
-      toast(`Receipt for ${money(amount)} saved${sync.online ? "" : " on this device"}`);
+      toast(`Ricevuta da ${money(amount)} salvata${sync.online ? "" : " su questo dispositivo"}`);
     });
   });
 
@@ -1010,30 +1013,30 @@
     const r = state.receipts.find((x) => x.id === id); if (!r) return;
     $("#vw-title").textContent = `${money(r.amount)} · ${personName(r.personId)}`;
     const src = r.hasPhoto ? photoSrc(r) : null;
-    const media = !r.hasPhoto ? `<div class="empty"><p>No photo was attached to this receipt.</p></div>`
-      : !src ? `<div class="empty"><p>The photo is still on the phone that took it. It will appear once that phone is back online.</p></div>`
-      : r.photoType === "application/pdf" ? `<div class="empty"><p>This receipt is a PDF.</p><a class="btn" href="${esc(src)}" target="_blank" rel="noopener">Open PDF</a></div>`
-      : `<a href="${esc(src)}" target="_blank" rel="noopener"><img src="${esc(src)}" alt="Receipt photo"></a>`;
+    const media = !r.hasPhoto ? `<div class="empty"><p>A questa ricevuta non è allegata nessuna foto.</p></div>`
+      : !src ? `<div class="empty"><p>La foto è ancora sul telefono che l'ha scattata. Comparirà quando quel telefono tornerà online.</p></div>`
+      : r.photoType === "application/pdf" ? `<div class="empty"><p>Questa ricevuta è un PDF.</p><a class="btn" href="${esc(src)}" target="_blank" rel="noopener">Apri PDF</a></div>`
+      : `<a href="${esc(src)}" target="_blank" rel="noopener"><img src="${esc(src)}" alt="Foto della ricevuta"></a>`;
     const canChange = isAdmin() || (r.by === me.id && r.status !== "reimbursed");
     $("#vw-body").innerHTML = `${media}
       <dl class="kv">
-        <dt>For</dt><dd>${esc(r.description || "—")}</dd>
-        <dt>Paid by</dt><dd>${esc(personName(r.personId))}</dd>
-        <dt>Category</dt><dd><span class="cat c-${catOf(r)}">${esc(catLabel(catOf(r)))}</span></dd>
-        <dt>Date</dt><dd>${fmtDate(r.date)}</dd>
+        <dt>Per</dt><dd>${esc(r.description || "—")}</dd>
+        <dt>Pagato da</dt><dd>${esc(personName(r.personId))}</dd>
+        <dt>Categoria</dt><dd><span class="cat c-${catOf(r)}">${esc(catLabel(catOf(r)))}</span></dd>
+        <dt>Data</dt><dd>${fmtDate(r.date)}</dd>
         ${receiptJobRow(r)}
-        <dt>Status</dt><dd>${r.status === "reimbursed" ? `<span class="pill paid">Reimbursed${r.reimbursedAt ? " · " + fmtDate(r.reimbursedAt) : ""}</span>` : `<span class="pill owed">To reimburse</span>`}</dd>
+        <dt>Stato</dt><dd>${r.status === "reimbursed" ? `<span class="pill paid">Rimborsato${r.reimbursedAt ? " · " + fmtDate(r.reimbursedAt) : ""}</span>` : `<span class="pill owed">Da rimborsare</span>`}</dd>
       </dl>
       <div class="err" id="vw-err" hidden></div>
       ${canChange ? `<div class="sheet-foot">
-        <button class="btn danger left" type="button" id="vw-del">Delete</button>
-        ${isAdmin() ? (r.status === "reimbursed" ? `<button class="btn" type="button" id="vw-undo">Mark not reimbursed</button>` : `<button class="btn primary" type="button" id="vw-done">Mark reimbursed</button>`) : ""}
+        <button class="btn danger left" type="button" id="vw-del">Elimina</button>
+        ${isAdmin() ? (r.status === "reimbursed" ? `<button class="btn" type="button" id="vw-undo">Segna come non rimborsato</button>` : `<button class="btn primary" type="button" id="vw-done">Segna come rimborsato</button>`) : ""}
       </div>` : ""}`;
-    $("#vw-done")?.addEventListener("click", async () => { await save("receipts", { ...r, status: "reimbursed", reimbursedAt: isoDay() }); $("#d-view").close(); toast("Marked reimbursed"); });
-    $("#vw-undo")?.addEventListener("click", async () => { await save("receipts", { ...r, status: "pending", reimbursedAt: null }); $("#d-view").close(); toast("Back on the to-reimburse list"); });
-    $("#vw-del")?.addEventListener("click", (e) => armed(e.currentTarget, "Tap again to delete", async () => {
+    $("#vw-done")?.addEventListener("click", async () => { await save("receipts", { ...r, status: "reimbursed", reimbursedAt: isoDay() }); $("#d-view").close(); toast("Segnato come rimborsato"); });
+    $("#vw-undo")?.addEventListener("click", async () => { await save("receipts", { ...r, status: "pending", reimbursedAt: null }); $("#d-view").close(); toast("Di nuovo tra le ricevute da rimborsare"); });
+    $("#vw-del")?.addEventListener("click", (e) => armed(e.currentTarget, "Tocca di nuovo per eliminare", async () => {
       await idb.del("photos", r.id).catch(() => {});
-      await remove("receipts", r); $("#d-view").close(); toast("Receipt deleted");
+      await remove("receipts", r); $("#d-view").close(); toast("Ricevuta eliminata");
     }));
     openSheet("#d-view");
   }
@@ -1042,10 +1045,10 @@
   function payInfo() {
     const pid = $("#yf-person").value, b = balances().get(pid); if (!b) return;
     const open = state.receipts.filter((r) => r.personId === pid && r.status !== "reimbursed");
-    $("#yf-bal").textContent = `Wages due ${money(Math.max(0, b.wageDue))}${b.rec ? ` · receipts ${money(b.rec)}` : ""} · owed ${money(b.owed)}`;
+    $("#yf-bal").textContent = `Compensi dovuti ${money(Math.max(0, b.wageDue))}${b.rec ? ` · ricevute ${money(b.rec)}` : ""} · da pagare ${money(b.owed)}`;
     $("#yf-amount").value = Math.max(0, b.wageDue).toFixed(2);
     $("#yf-rec-wrap").hidden = !open.length;
-    $("#yf-rec-lbl").textContent = `Also pay back ${open.length} receipt${open.length === 1 ? "" : "s"} (${money(b.rec)}) in this payment`;
+    $("#yf-rec-lbl").textContent = (open.length === 1 ? `Rimborsa anche 1 ricevuta (${money(b.rec)}) con questo pagamento` : `Rimborsa anche ${open.length} ricevute (${money(b.rec)}) con questo pagamento`);
   }
   function openPay(personId) {
     if (!isAdmin() || needPeople()) return;
@@ -1062,13 +1065,13 @@
     const pid = $("#yf-person").value, amount = parseFloat($("#yf-amount").value) || 0, date = $("#yf-date").value;
     const recs = $("#yf-rec-wrap").hidden || !$("#yf-rec").checked ? [] : state.receipts.filter((r) => r.personId === pid && r.status !== "reimbursed");
     const recAmt = round2(recs.reduce((a, r) => a + (Number(r.amount) || 0), 0));
-    if (!date) return showErr(err, "Pick the payment date.");
-    if (amount < 0) return showErr(err, "The amount can't be negative.");
-    if (amount === 0 && !recs.length) return showErr(err, "Enter the wages paid, or tick the receipts box.");
+    if (!date) return showErr(err, "Scegli la data del pagamento.");
+    if (amount < 0) return showErr(err, "L'importo non può essere negativo.");
+    if (amount === 0 && !recs.length) return showErr(err, "Inserisci i compensi pagati, oppure spunta la casella delle ricevute.");
     attempt(e.currentTarget, err, async () => {
       await save("payments", { personId: pid, date, amount: round2(amount), method: $("#yf-method").value, note: $("#yf-note").value.trim(), receiptIds: recs.map((r) => r.id), receiptsAmount: recAmt });
       for (const r of recs) await save("receipts", { ...r, status: "reimbursed", reimbursedAt: date });
-      $("#d-pay").close(); toast(`${money(amount + recAmt)} to ${personName(pid)} recorded`);
+      $("#d-pay").close(); toast(`Registrati ${money(amount + recAmt)} a ${personName(pid)}`);
     });
   });
 
@@ -1078,10 +1081,10 @@
     acctMode = { mode, id };
     const a = accounts?.find((x) => x.id === id);
     const reset = mode === "reset";
-    $("#af-title").textContent = reset ? `New password for ${a?.name}` : "Add login";
+    $("#af-title").textContent = reset ? `Nuova password per ${a?.name}` : "Aggiungi accesso";
     $("#af-name-wrap").hidden = $("#af-user-wrap").hidden = $("#af-role-wrap").hidden = reset;
-    $("#af-pass-lbl").textContent = reset ? "New password" : "Password";
-    $("#af-btn").textContent = reset ? "Set password" : "Create login";
+    $("#af-pass-lbl").textContent = reset ? "Nuova password" : "Password";
+    $("#af-btn").textContent = reset ? "Imposta password" : "Crea accesso";
     $("#af-name").value = ""; $("#af-user").value = ""; $("#af-role").value = "staff";
     $("#af-pass").value = [...crypto.getRandomValues(new Uint8Array(6))].map((b) => "abcdefghjkmnpqrstuvwxyz23456789"[b % 31]).join("") + "-" + [...crypto.getRandomValues(new Uint8Array(4))].map((b) => "23456789"[b % 8]).join("");
     showErr($("#af-err"), "");
@@ -1093,7 +1096,7 @@
     attempt(e.currentTarget, err, async () => {
       if (acctMode.mode === "reset") await api("/api/users/" + acctMode.id, { body: { password: $("#af-pass").value } });
       else await api("/api/users", { body: { name: $("#af-name").value.trim(), username: $("#af-user").value.trim(), role: $("#af-role").value, password: $("#af-pass").value } });
-      $("#d-account").close(); toast(acctMode.mode === "reset" ? "Password changed" : "Login created");
+      $("#d-account").close(); toast(acctMode.mode === "reset" ? "Password cambiata" : "Accesso creato");
       loadAccounts();
     }).catch(() => {});
   });
@@ -1101,7 +1104,7 @@
     e.preventDefault();
     attempt(e.currentTarget, $("#cp-err"), async () => {
       await api("/api/password", { body: { current: $("#cp-cur").value, password: $("#cp-new").value } });
-      $("#d-password").close(); toast("Password changed");
+      $("#d-password").close(); toast("Password cambiata");
     });
   });
 
@@ -1154,50 +1157,50 @@
   const sign = (n, s) => `<span class="stmt-sign">${s}</span>${money(n)}`;
   function stmtDoc(st, label) {
     const p = st.person, c = round2(st.closing), ag = esc(agencyName());
-    const due = c > 0.004 ? ["owed", `Owed to ${esc((p.name || "").split(" ")[0] || "you")}`] : c < -0.004 ? ["over", "Overpaid"] : ["paid", "Settled"];
+    const due = c > 0.004 ? ["owed", `Da pagare a ${esc((p.name || "").split(" ")[0] || "te")}`] : c < -0.004 ? ["over", "Pagato in eccesso"] : ["paid", "Saldato"];
     const n = st.work.length;
-    const workRows = st.work.map((w) => `<tr><td>${fmtShort(w.s.date)}</td><td>${esc(w.s.job || "—")}${w.s.location ? `<span class="sub">${esc(w.s.location)}</span>` : ""}</td><td class="n">${hrs(w.s.hours)}${w.pay.overtimeHours ? `<span class="sub">${hrs(w.pay.overtimeHours)} OT</span>` : ""}</td><td class="basis">${esc(payExplain(w.s.hours, w.terms, false))}</td><td class="n">${money(w.pay.amount)}</td></tr>`).join("");
-    const recRows = st.added.map((r) => `<tr><td>${fmtShort(r.date)}</td><td>${esc(r.description || "Receipt")}</td><td>${r.status === "reimbursed" ? `Paid back${r.reimbursedAt ? " " + fmtShort(r.reimbursedAt) : ""}` : "To reimburse"}</td><td class="n">${money(r.amount)}</td></tr>`).join("");
-    const outRows = st.out.map((o) => `<tr><td>${fmtShort(o.date)}</td><td>${o.p ? `${esc(o.p.method || "Payment")}${o.p.note ? `<span class="sub">${esc(o.p.note)}</span>` : ""}` : `Receipt paid back<span class="sub">${esc(o.r.description || "Receipt")}</span>`}</td><td class="n">${o.wages ? money(o.wages) : "—"}</td><td class="n">${o.back ? money(o.back) : "—"}</td><td class="n">${money(o.wages + o.back)}</td></tr>`).join("");
+    const workRows = st.work.map((w) => `<tr><td>${fmtShort(w.s.date)}</td><td>${esc(w.s.job || "—")}${w.s.location ? `<span class="sub">${esc(w.s.location)}</span>` : ""}</td><td class="n">${hrs(w.s.hours)}${w.pay.overtimeHours ? `<span class="sub">${hrs(w.pay.overtimeHours)} straord.</span>` : ""}</td><td class="basis">${esc(payExplain(w.s.hours, w.terms, false))}</td><td class="n">${money(w.pay.amount)}</td></tr>`).join("");
+    const recRows = st.added.map((r) => `<tr><td>${fmtShort(r.date)}</td><td>${esc(r.description || "Ricevuta")}</td><td>${r.status === "reimbursed" ? `Rimborsato${r.reimbursedAt ? " " + fmtShort(r.reimbursedAt) : ""}` : "Da rimborsare"}</td><td class="n">${money(r.amount)}</td></tr>`).join("");
+    const outRows = st.out.map((o) => `<tr><td>${fmtShort(o.date)}</td><td>${o.p ? `${esc(methodLabel(o.p.method) || "Pagamento")}${o.p.note ? `<span class="sub">${esc(o.p.note)}</span>` : ""}` : `Ricevuta rimborsata<span class="sub">${esc(o.r.description || "Ricevuta")}</span>`}</td><td class="n">${o.wages ? money(o.wages) : "—"}</td><td class="n">${o.back ? money(o.back) : "—"}</td><td class="n">${money(o.wages + o.back)}</td></tr>`).join("");
     const none = (t) => `<p class="stmt-none">${t}</p>`;
     return `<article class="stmt">
       <header class="stmt-top">
-        <div class="stmt-from"><b class="stmt-agency">${ag}</b><span class="stmt-kind">Statement of account</span></div>
-        <dl class="stmt-meta"><div><dt>Period</dt><dd>${esc(label)}</dd></div><div><dt>Issued</dt><dd>${fmtDate(isoDay())}</dd></div></dl>
+        <div class="stmt-from"><b class="stmt-agency">${ag}</b><span class="stmt-kind">Estratto conto</span></div>
+        <dl class="stmt-meta"><div><dt>Periodo</dt><dd>${esc(label)}</dd></div><div><dt>Emesso il</dt><dd>${fmtDate(isoDay())}</dd></div></dl>
       </header>
       <div class="stmt-band">
         <div class="stmt-payee">
-          <span class="stmt-k">Prepared for</span>
+          <span class="stmt-k">Intestato a</span>
           <h2 class="stmt-name">${esc(p.name || "")}</h2>
           <p>${p.role ? roleLabel(p.role) : ""}${p.speciality ? " · " + esc(p.speciality) : ""}</p>
           ${p.id ? `<p class="stmt-terms">${esc(termsText(payTerms(p)))}</p>` : ""}
         </div>
-        <div class="stmt-due ${due[0]}"><span class="stmt-k">${due[1]}</span><b>${money(c)}</b><span>Balance at ${fmtDate(st.to)}</span></div>
+        <div class="stmt-due ${due[0]}"><span class="stmt-k">${due[1]}</span><b>${money(c)}</b><span>Saldo al ${fmtDate(st.to)}</span></div>
       </div>
       <div class="stmt-recon">
-        <div><span>Opening balance<em>at ${fmtDate(st.from)}</em></span><b>${money(st.opening)}</b></div>
-        <div><span>Work<em>${n} ${n === 1 ? "shift" : "shifts"} · ${hrs(st.t.hours)}${st.t.ot ? ` incl. ${hrs(st.t.ot)} overtime` : ""}</em></span><b>${sign(st.t.earned, "+")}</b></div>
-        <div><span>Receipts added<em>${st.added.length} ${st.added.length === 1 ? "receipt" : "receipts"}</em></span><b>${sign(st.t.recAdded, "+")}</b></div>
-        <div><span>Wages paid</span><b>${sign(st.t.wages, "−")}</b></div>
-        <div><span>Receipts paid back</span><b>${sign(st.t.back, "−")}</b></div>
-        <div class="total"><span>Closing balance<em>at ${fmtDate(st.to)}</em></span><b>${money(c)}</b></div>
+        <div><span>Saldo iniziale<em>al ${fmtDate(st.from)}</em></span><b>${money(st.opening)}</b></div>
+        <div><span>Lavoro<em>${n} ${n === 1 ? "turno" : "turni"} · ${hrs(st.t.hours)}${st.t.ot ? ` di cui ${hrs(st.t.ot)} di straordinario` : ""}</em></span><b>${sign(st.t.earned, "+")}</b></div>
+        <div><span>Ricevute aggiunte<em>${st.added.length} ${st.added.length === 1 ? "ricevuta" : "ricevute"}</em></span><b>${sign(st.t.recAdded, "+")}</b></div>
+        <div><span>Compensi pagati</span><b>${sign(st.t.wages, "−")}</b></div>
+        <div><span>Ricevute rimborsate</span><b>${sign(st.t.back, "−")}</b></div>
+        <div class="total"><span>Saldo finale<em>al ${fmtDate(st.to)}</em></span><b>${money(c)}</b></div>
       </div>
-      <section class="stmt-sec"><h3>Work</h3>${n ? `<div class="stmt-scroll"><table>
-        <thead><tr><th>Date</th><th>Job · location</th><th class="n">Hours</th><th>Pay basis</th><th class="n">Amount</th></tr></thead>
+      <section class="stmt-sec"><h3>Lavoro</h3>${n ? `<div class="stmt-scroll"><table>
+        <thead><tr><th>Data</th><th>Lavoro · posizione</th><th class="n">Ore</th><th>Base di calcolo</th><th class="n">Importo</th></tr></thead>
         <tbody>${workRows}</tbody>
-        <tfoot><tr><td colspan="2">${n} ${n === 1 ? "shift" : "shifts"}</td><td class="n">${hrs(st.t.hours)}</td><td></td><td class="n">${money(st.t.earned)}</td></tr></tfoot>
-      </table></div>` : none("No hours logged in this period.")}</section>
-      <section class="stmt-sec"><h3>Receipts added</h3>${st.added.length ? `<div class="stmt-scroll"><table>
-        <thead><tr><th>Date</th><th>For</th><th>Status</th><th class="n">Amount</th></tr></thead>
+        <tfoot><tr><td colspan="2">${n} ${n === 1 ? "turno" : "turni"}</td><td class="n">${hrs(st.t.hours)}</td><td></td><td class="n">${money(st.t.earned)}</td></tr></tfoot>
+      </table></div>` : none("Nessuna ora registrata in questo periodo.")}</section>
+      <section class="stmt-sec"><h3>Ricevute aggiunte</h3>${st.added.length ? `<div class="stmt-scroll"><table>
+        <thead><tr><th>Data</th><th>Per</th><th>Stato</th><th class="n">Importo</th></tr></thead>
         <tbody>${recRows}</tbody>
-        <tfoot><tr><td colspan="3">${st.added.length} ${st.added.length === 1 ? "receipt" : "receipts"}</td><td class="n">${money(st.t.recAdded)}</td></tr></tfoot>
-      </table></div>` : none("No receipts in this period.")}</section>
-      <section class="stmt-sec"><h3>Payments</h3>${st.out.length ? `<div class="stmt-scroll"><table>
-        <thead><tr><th>Date</th><th>Method · note</th><th class="n">Wages</th><th class="n">Receipts</th><th class="n">Total</th></tr></thead>
+        <tfoot><tr><td colspan="3">${st.added.length} ${st.added.length === 1 ? "ricevuta" : "ricevute"}</td><td class="n">${money(st.t.recAdded)}</td></tr></tfoot>
+      </table></div>` : none("Nessuna ricevuta in questo periodo.")}</section>
+      <section class="stmt-sec"><h3>Pagamenti</h3>${st.out.length ? `<div class="stmt-scroll"><table>
+        <thead><tr><th>Data</th><th>Metodo · nota</th><th class="n">Compensi</th><th class="n">Ricevute</th><th class="n">Totale</th></tr></thead>
         <tbody>${outRows}</tbody>
-        <tfoot><tr><td colspan="2">${st.out.length} ${st.out.length === 1 ? "payment" : "payments"}</td><td class="n">${money(st.t.wages)}</td><td class="n">${money(st.t.back)}</td><td class="n">${money(st.t.wages + st.t.back)}</td></tr></tfoot>
-      </table></div>` : none("No payments in this period.")}</section>
-      <footer class="stmt-foot"><span>Amounts in ${esc(state.settings.currency || "EUR")}. A positive balance is owed by ${ag} to ${esc(p.name || "the payee")}; a negative balance has been overpaid.</span></footer>
+        <tfoot><tr><td colspan="2">${st.out.length} ${st.out.length === 1 ? "pagamento" : "pagamenti"}</td><td class="n">${money(st.t.wages)}</td><td class="n">${money(st.t.back)}</td><td class="n">${money(st.t.wages + st.t.back)}</td></tr></tfoot>
+      </table></div>` : none("Nessun pagamento in questo periodo.")}</section>
+      <footer class="stmt-foot"><span>Importi in ${esc(state.settings.currency || "EUR")}. Un saldo positivo è dovuto da ${ag} a ${esc(p.name || "il beneficiario")}; un saldo negativo indica un pagamento in eccesso.</span></footer>
     </article>`;
   }
   // The statement's own CSS rules, lifted from this page's stylesheet, so the downloaded file looks the same.
@@ -1213,9 +1216,9 @@
     return out.join("\n");
   }
   function statementFile(st, label) {
-    const title = `${agencyName()} · Statement · ${st.person.name || ""} · ${label}`;
+    const title = `${agencyName()} · Estratto conto · ${st.person.name || ""} · ${label}`;
     return `<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(title)}</title>
+<html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(title)}</title>
 <style>
 *,*::before,*::after{box-sizing:border-box}
 body{margin:0;background:#E8E8E4;color:#121316;font-family:"Instrument Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:14px;line-height:1.5;-webkit-print-color-adjust:exact;print-color-adjust:exact}
@@ -1229,23 +1232,23 @@ ${docCss()}
   }
   function statementCsv(st, label) {
     const name = st.person.name || "";
-    const rows = [["Statement of account", agencyName()], ["Prepared for", name], ["Period", label, st.from, st.to], ["Pay terms", st.person.id ? termsText(payTerms(st.person)) : ""], ["Issued", isoDay()], [],
-      ["Date", "Entry", "Details", "Hours", "Regular hours", "Overtime hours", "Pay basis", "In", "Out", "Balance"]];
+    const rows = [["Estratto conto", agencyName()], ["Intestato a", name], ["Periodo", label, st.from, st.to], ["Condizioni di pagamento", st.person.id ? termsText(payTerms(st.person)) : ""], ["Emesso il", isoDay()], [],
+      ["Data", "Voce", "Dettagli", "Ore", "Ore ordinarie", "Ore di straordinario", "Base di calcolo", "Entrate", "Uscite", "Saldo"]];
     let bal = st.opening;
-    rows.push([st.from, "Opening balance", "", "", "", "", "", "", "", round2(bal)]);
+    rows.push([st.from, "Saldo iniziale", "", "", "", "", "", "", "", round2(bal)]);
     const lines = [
-      ...st.work.map((w) => ({ date: w.s.date, o: 0, row: ["Work", [w.s.job, w.s.location].filter(Boolean).join(" · "), w.s.hours, round2(w.pay.regularHours), round2(w.pay.overtimeHours), payExplain(w.s.hours, w.terms, false)], inn: w.pay.amount, out: 0 })),
-      ...st.added.map((r) => ({ date: r.date, o: 1, row: ["Receipt", r.description || "", "", "", "", ""], inn: Number(r.amount) || 0, out: 0 })),
-      ...st.out.map((x) => ({ date: x.date, o: 2, row: [x.p ? "Payment" : "Receipt paid back", x.p ? [x.p.method, x.p.note, x.back ? `incl. ${x.recs.length} receipt${x.recs.length === 1 ? "" : "s"}` : ""].filter(Boolean).join(" · ") : x.r.description || "", "", "", "", ""], inn: 0, out: x.wages + x.back })),
+      ...st.work.map((w) => ({ date: w.s.date, o: 0, row: ["Lavoro", [w.s.job, w.s.location].filter(Boolean).join(" · "), w.s.hours, round2(w.pay.regularHours), round2(w.pay.overtimeHours), payExplain(w.s.hours, w.terms, false)], inn: w.pay.amount, out: 0 })),
+      ...st.added.map((r) => ({ date: r.date, o: 1, row: ["Ricevuta", r.description || "", "", "", "", ""], inn: Number(r.amount) || 0, out: 0 })),
+      ...st.out.map((x) => ({ date: x.date, o: 2, row: [x.p ? "Pagamento" : "Ricevuta rimborsata", x.p ? [methodLabel(x.p.method), x.p.note, x.back ? `incl. ${x.recs.length} ${x.recs.length === 1 ? "ricevuta" : "ricevute"}` : ""].filter(Boolean).join(" · ") : x.r.description || "", "", "", "", ""], inn: 0, out: x.wages + x.back })),
     ].sort((a, b) => (a.date || "").localeCompare(b.date || "") || a.o - b.o);
     for (const l of lines) { bal += l.inn - l.out; rows.push([l.date, ...l.row, l.inn ? round2(l.inn) : "", l.out ? round2(l.out) : "", round2(bal)]); }
-    rows.push([st.to, "Closing balance", "", round2(st.t.hours), round2(st.t.reg), round2(st.t.ot), "", round2(st.t.earned + st.t.recAdded), round2(st.t.wages + st.t.back), round2(st.closing)]);
-    rows.push([], ["Earned", round2(st.t.earned)], ["Receipts added", round2(st.t.recAdded)], ["Wages paid", round2(st.t.wages)], ["Receipts paid back", round2(st.t.back)]);
+    rows.push([st.to, "Saldo finale", "", round2(st.t.hours), round2(st.t.reg), round2(st.t.ot), "", round2(st.t.earned + st.t.recAdded), round2(st.t.wages + st.t.back), round2(st.closing)]);
+    rows.push([], ["Guadagnato", round2(st.t.earned)], ["Ricevute aggiunte", round2(st.t.recAdded)], ["Compensi pagati", round2(st.t.wages)], ["Ricevute rimborsate", round2(st.t.back)]);
     return rows;
   }
   // One row per person for a period: what an accountant needs for the month.
   function periodSummaryCsv(per) {
-    const rows = [["Person", "Role", "Pay terms", "Shifts", "Hours", "Regular hours", "Overtime hours", "Earned", "Receipts added", "Wages paid", "Receipts paid back", "Total paid", "Opening balance", "Closing balance"]];
+    const rows = [["Persona", "Ruolo", "Condizioni di pagamento", "Turni", "Ore", "Ore ordinarie", "Ore di straordinario", "Guadagnato", "Ricevute aggiunte", "Compensi pagati", "Ricevute rimborsate", "Totale pagato", "Saldo iniziale", "Saldo finale"]];
     const tot = Array(10).fill(0);
     for (const p of state.people.slice().sort(byName)) {
       const st = statementData(p.id, per.from, per.to);
@@ -1253,10 +1256,10 @@ ${docCss()}
       nums.forEach((v, i) => (tot[i] += v));
       rows.push([p.name, roleLabel(p.role), termsText(payTerms(p)), ...nums.slice(0, 4).map(round2), ...nums.slice(4, 9).map(round2), round2(st.opening), round2(st.closing)]);
     }
-    rows.push(["Total", "", "", ...tot.slice(0, 4).map(round2), ...tot.slice(4, 9).map(round2), "", round2(tot[9])]);
+    rows.push(["Totale", "", "", ...tot.slice(0, 4).map(round2), ...tot.slice(4, 9).map(round2), "", round2(tot[9])]);
     return rows;
   }
-  const slug = (s) => String(s || "").normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "").toLowerCase() || "person";
+  const slug = (s) => String(s || "").normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "").toLowerCase() || "persona";
   function saveFile(name, text, type) {
     const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([text], { type })); a.download = name;
     document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
@@ -1293,13 +1296,13 @@ ${docCss()}
   $("#st-print").addEventListener("click", () => { renderStatement(); window.print(); });
   $("#st-html").addEventListener("click", () => {
     const { st, per } = stCur;
-    saveFile(`statement-${slug(st.person.name)}-${per.key}.html`, statementFile(st, per.label), "text/html");
+    saveFile(`estratto-conto-${slug(st.person.name)}-${per.key}.html`, statementFile(st, per.label), "text/html");
   });
   $("#st-csv").addEventListener("click", () => {
     const { st, per } = stCur;
-    download(`statement-${slug(st.person.name)}-${per.key}.csv`, statementCsv(st, per.label));
+    download(`estratto-conto-${slug(st.person.name)}-${per.key}.csv`, statementCsv(st, per.label));
   });
-  $("#st-all").addEventListener("click", () => { const per = stPeriod(); download(`summary-${per.key}.csv`, periodSummaryCsv(per)); });
+  $("#st-all").addEventListener("click", () => { const per = stPeriod(); download(`riepilogo-${per.key}.csv`, periodSummaryCsv(per)); });
 
   // ---------- Global clicks ----------
   document.addEventListener("click", (e) => {
@@ -1317,7 +1320,7 @@ ${docCss()}
       case "q-approve-sel": return approve([...ui.qSel]);
       case "q-reject": return openReject([id]);
       case "q-reject-sel": return openReject([...ui.qSel]);
-      case "place-del": return armed(t, "Remove?", () => { const pl = state.places.find((x) => x.id === id); if (pl) remove("places", pl).then(() => toast("Place removed")); });
+      case "place-del": return armed(t, "Rimuovere?", () => { const pl = state.places.find((x) => x.id === id); if (pl) remove("places", pl).then(() => toast("Luogo rimosso")); });
       case "act-more": return loadActivity(true);
       case "my-hours": ui.hPerson = id; ui.hMonth = ""; location.hash = "hours"; return;
       case "my-receipts": ui.rPerson = id; ui.rStatus = "all"; $$("#rec-seg button").forEach((x) => x.setAttribute("aria-pressed", String(x.dataset.rs === "all"))); location.hash = "receipts"; return;
@@ -1333,12 +1336,12 @@ ${docCss()}
       case "toggle-role": case "toggle-disabled": {
         const a = accounts.find((x) => x.id === id);
         const body = act === "toggle-role" ? { role: a.role === "admin" ? "staff" : "admin" } : { disabled: !a.disabled };
-        return api("/api/users/" + id, { body }).then(loadAccounts).catch((err) => toast(err.msg || "Connect to the internet to change logins."));
+        return api("/api/users/" + id, { body }).then(loadAccounts).catch((err) => toast(err.msg || "Connettiti a internet per modificare gli accessi."));
       }
-      case "del-payment": return armed(t, "Confirm", async () => {
+      case "del-payment": return armed(t, "Conferma", async () => {
         const p = state.payments.find((x) => x.id === id);
         for (const rid of p?.receiptIds || []) { const r = state.receipts.find((x) => x.id === rid); if (r) await save("receipts", { ...r, status: "pending", reimbursedAt: null }); }
-        await remove("payments", p); toast("Payment deleted. Its receipts are back on the to-reimburse list.");
+        await remove("payments", p); toast("Pagamento eliminato. Le sue ricevute sono di nuovo da rimborsare.");
       });
     }
   });
@@ -1367,7 +1370,7 @@ ${docCss()}
     const img = e.target;
     if (img.tagName !== "IMG" || img.dataset.failed) return;
     img.dataset.failed = "1";
-    const ph = document.createElement("span"); ph.className = "ph"; ph.innerHTML = ICON.cam + "<span>Photo shows when you're online</span>";
+    const ph = document.createElement("span"); ph.className = "ph"; ph.innerHTML = ICON.cam + "<span>La foto compare quando sei online</span>";
     img.replaceWith(ph);
   }, true);
 
@@ -1379,19 +1382,19 @@ ${docCss()}
     if (a.dataset.me === String(on)) return;
     a.dataset.me = String(on);
     a.setAttribute("href", on ? "#me" : "#team");
-    a.querySelector("span").textContent = on ? "My page" : "Team";
+    const lbl = a.querySelector("span"); lbl.textContent = on ? "La mia pagina" : "Team"; if (on) lbl.dataset.short = "Profilo"; else delete lbl.dataset.short;
     a.querySelector("svg").innerHTML = on ? NAV_SVG.me : NAV_SVG.team;
   }
   function paintMe() {
-    $("#me-chip").innerHTML = `<div><b>${esc(me.name)}</b>${isAdmin() ? "Admin" : "Staff"}</div>`;
+    $("#me-chip").innerHTML = `<div><b>${esc(me.name)}</b>${isAdmin() ? "Amministratore" : "Staff"}</div>`;
     render();
   }
 
   function renderMe(bal) {
     const el = $("#mypage"), p = myPerson();
     if (!p) {
-      el.innerHTML = `<div class="view-head"><div><h1>My page</h1><p>Your hours, receipts and what you're owed, in one place.</p></div></div>` +
-        empty("Your login isn't linked to the board yet", isAdmin() ? "Link your login to your name in Settings → Team logins." : "Ask an admin to link your login to your name on the board. Then your hours and balance show here.");
+      el.innerHTML = `<div class="view-head"><div><h1>La mia pagina</h1><p>Le tue ore, le ricevute e quanto ti è dovuto, in un unico posto.</p></div></div>` +
+        empty("Il tuo accesso non è ancora collegato al team", isAdmin() ? "Collega il tuo accesso al tuo nome in Impostazioni → Accessi del team." : "Chiedi a un amministratore di collegare il tuo accesso al tuo nome nel team. Poi qui vedrai le tue ore e il tuo saldo.");
       return;
     }
     const b = bal.get(p.id), m = isoMonth();
@@ -1403,45 +1406,45 @@ ${docCss()}
     const live = p.location && p.locationAt && Date.now() - p.locationAt < 12 * 3600e3;
     const shiftRow = (s) => {
       const inner = `<span class="r-main"><span class="r-title">${fmtShort(s.date)}${s.start && s.end ? ` <span class="muted mono">${esc(s.start)}–${esc(s.end)}</span>` : ""}</span>
-        <span class="r-sub">${[esc(s.job || ""), esc(s.location || "")].filter(Boolean).join(" · ") || "No job noted"}</span></span>
+        <span class="r-sub">${[esc(s.job || ""), esc(s.location || "")].filter(Boolean).join(" · ") || "Nessun lavoro indicato"}</span></span>
         <span class="r-end"><span class="mono">${hrs(s.hours)}</span>${approvalPill(s) || unsyncedTag("shifts", s.id)}</span>`;
       return mine(s) ? `<li><button class="r" type="button" data-act="edit-shift" data-id="${s.id}">${inner}</button></li>` : `<li><div class="r">${inner}</div></li>`;
     };
     const recRow = (r) => `<li><button class="r" type="button" data-act="view-receipt" data-id="${r.id}">
-        <span class="r-main"><span class="r-title">${esc(r.description || "Receipt")}</span>
+        <span class="r-main"><span class="r-title">${esc(r.description || "Ricevuta")}</span>
         <span class="r-sub"><span class="cat c-${catOf(r)}">${esc(catLabel(catOf(r)))}</span> ${fmtShort(r.date)} ${unsyncedTag("receipts", r.id)}</span></span>
-        <span class="r-end"><span class="mono">${money(r.amount)}</span>${r.status === "reimbursed" ? `<span class="pill paid">Reimbursed</span>` : `<span class="pill owed">To reimburse</span>`}</span></button></li>`;
+        <span class="r-end"><span class="mono">${money(r.amount)}</span>${r.status === "reimbursed" ? `<span class="pill paid">Rimborsato</span>` : `<span class="pill owed">Da rimborsare</span>`}</span></button></li>`;
     el.innerHTML = `
       <div class="me-head">
         <div class="me-id">
-          <span class="eyebrow">My page</span>
+          <span class="eyebrow">La mia pagina</span>
           <h1 class="me-name">${esc(p.name)}</h1>
           <div class="comp-role"><span class="tag ${p.role === "technician" ? "technician" : "model"}">${roleLabel(p.role)}</span>${p.speciality ? `<span>${esc(p.speciality)}</span>` : ""}<span class="mono">${money(p.rate)} / h</span></div>
         </div>
-        <div class="view-actions"><a class="btn" href="#team">${ICON.pin}Team board</a></div>
+        <div class="view-actions"><a class="btn" href="#team">${ICON.pin}Team</a></div>
       </div>
       <div class="summary me-sum">
-        <div><span class="eyebrow">Owed to you</span><span class="big ${b.owed > 0.004 ? "" : "zero"}">${money(b.owed)}</span>
-          <span class="note">${b.owed > 0.004 ? `Wages ${money(Math.max(0, b.wageDue))} · receipts ${money(b.rec)}` : b.owed < -0.004 ? "Paid ahead of hours worked" : "You're paid up"}</span></div>
-        <div><span class="eyebrow">Paid to you</span><span class="mid">${money(b.paid)}</span><span class="note">wages so far</span></div>
-        <div><span class="eyebrow">Receipts</span><span class="mid">${money(b.rec)}</span><span class="note">${b.recN} waiting to be paid back</span></div>
-        <div><span class="eyebrow">This month</span><span class="mid">${hrs(b.hMonth)}</span><span class="note">${waitMonth ? `+ ${hrs(waitMonth)} waiting for approval` : "approved"}</span></div>
+        <div><span class="eyebrow">Ti è dovuto</span><span class="big ${b.owed > 0.004 ? "" : "zero"}">${money(b.owed)}</span>
+          <span class="note">${b.owed > 0.004 ? `Compensi ${money(Math.max(0, b.wageDue))} · ricevute ${money(b.rec)}` : b.owed < -0.004 ? "Pagato in anticipo sulle ore lavorate" : "Sei in regola"}</span></div>
+        <div><span class="eyebrow">Pagato a te</span><span class="mid">${money(b.paid)}</span><span class="note">compensi finora</span></div>
+        <div><span class="eyebrow">Ricevute</span><span class="mid">${money(b.rec)}</span><span class="note">${b.recN} da rimborsare</span></div>
+        <div><span class="eyebrow">Questo mese</span><span class="mid">${hrs(b.hMonth)}</span><span class="note">${waitMonth ? `+ ${hrs(waitMonth)} in attesa di approvazione` : "approvate"}</span></div>
       </div>
-      ${rejected.length ? `<div class="me-alert">${rejected.map((s) => `<div><span><b>${hrs(s.hours)} on ${fmtShort(s.date)} was rejected.</b>${s.approvalNote ? ` “${esc(s.approvalNote)}”` : ""} Fix it and save to send it again.</span>${mine(s) ? `<button class="btn sm" type="button" data-act="edit-shift" data-id="${s.id}">Fix</button>` : ""}</div>`).join("")}</div>` : ""}
+      ${rejected.length ? `<div class="me-alert">${rejected.map((s) => `<div><span><b>${hrs(s.hours)} del ${fmtShort(s.date)}: rifiutate.</b>${s.approvalNote ? ` “${esc(s.approvalNote)}”` : ""} Correggi e salva per inviarle di nuovo.</span>${mine(s) ? `<button class="btn sm" type="button" data-act="edit-shift" data-id="${s.id}">Correggi</button>` : ""}</div>`).join("")}</div>` : ""}
       <div class="me-quick">
-        <button type="button" data-act="add-shift" data-id="${p.id}">${ICON.clock}<span><b>Log my hours</b><small>Call, wrap and job</small></span></button>
-        <button type="button" data-act="add-receipt" data-id="${p.id}">${ICON.cam}<span><b>Add receipt</b><small>Photograph an expense</small></span></button>
-        <button type="button" data-act="loc" data-id="${p.id}" class="${live ? "live" : ""}">${ICON.pin}<span><b>Check in</b><small>${p.location ? `${esc(p.location)} · ${ago(p.locationAt)}` : "Say where you are"}</small></span></button>
+        <button type="button" data-act="add-shift" data-id="${p.id}">${ICON.clock}<span><b>Registra le mie ore</b><small>Convocazione, fine e lavoro</small></span></button>
+        <button type="button" data-act="add-receipt" data-id="${p.id}">${ICON.cam}<span><b>Aggiungi ricevuta</b><small>Fotografa una spesa</small></span></button>
+        <button type="button" data-act="loc" data-id="${p.id}" class="${live ? "live" : ""}">${ICON.pin}<span><b>Posizione</b><small>${p.location ? `${esc(p.location)} · ${ago(p.locationAt)}` : "Di' dove sei"}</small></span></button>
       </div>
       <div class="me-cols">
         <section class="panel me-list">
-          <div class="me-list-head"><h2>Recent hours</h2><button class="btn quiet sm" type="button" data-act="my-hours" data-id="${p.id}">All my hours</button></div>
-          ${shifts.length ? `<ul class="rows">${shifts.slice(0, 8).map(shiftRow).join("")}</ul>` : `<p>No hours yet. Log a call and wrap, or just the hours.</p>`}
-          ${b.nPend ? `<p class="me-foot"><span class="pill wait">${b.nPend} waiting</span> Hours count toward what you're owed once an admin approves them.</p>` : ""}
+          <div class="me-list-head"><h2>Ore recenti</h2><button class="btn quiet sm" type="button" data-act="my-hours" data-id="${p.id}">Tutte le mie ore</button></div>
+          ${shifts.length ? `<ul class="rows">${shifts.slice(0, 8).map(shiftRow).join("")}</ul>` : `<p>Ancora nessuna ora. Registra convocazione e fine, o solo le ore.</p>`}
+          ${b.nPend ? `<p class="me-foot"><span class="pill wait">${b.nPend} in attesa</span> Le ore contano in quanto ti è dovuto una volta approvate da un amministratore.</p>` : ""}
         </section>
         <section class="panel me-list">
-          <div class="me-list-head"><h2>Recent receipts</h2><button class="btn quiet sm" type="button" data-act="my-receipts" data-id="${p.id}">All my receipts</button></div>
-          ${recs.length ? `<ul class="rows">${recs.slice(0, 6).map(recRow).join("")}</ul>` : `<p>No receipts. Photograph one when you pay for something on a job.</p>`}
+          <div class="me-list-head"><h2>Ricevute recenti</h2><button class="btn quiet sm" type="button" data-act="my-receipts" data-id="${p.id}">Tutte le mie ricevute</button></div>
+          ${recs.length ? `<ul class="rows">${recs.slice(0, 6).map(recRow).join("")}</ul>` : `<p>Nessuna ricevuta. Fotografane una quando paghi qualcosa per un lavoro.</p>`}
         </section>
       </div>`;
   }
@@ -1454,28 +1457,28 @@ ${docCss()}
     for (const id of [...ui.qSel]) if (!list.some((s) => s.id === id)) ui.qSel.delete(id);
     if (!list.length) { el.innerHTML = ""; return; }
     const n = ui.qSel.size, total = list.reduce((a, s) => a + (Number(s.hours) || 0), 0);
-    el.innerHTML = `<section class="queue" aria-label="Waiting for approval">
+    el.innerHTML = `<section class="queue" aria-label="In attesa di approvazione">
       <div class="queue-head">
-        <div><h2>Waiting for approval</h2><p>${list.length} ${list.length === 1 ? "entry" : "entries"} · <span class="mono">${hrs(total)}</span>. Hours count toward what's owed once approved.</p></div>
+        <div><h2>In attesa di approvazione</h2><p>${list.length === 1 ? "1 voce" : `${list.length} voci`} · <span class="mono">${hrs(total)}</span>. Le ore contano nel dovuto una volta approvate.</p></div>
         <div class="queue-acts">
-          <label class="pick-all"><input type="checkbox" id="q-all" ${n === list.length ? "checked" : ""}>Select all</label>
-          <button class="btn sm danger" type="button" data-act="q-reject-sel" ${n ? "" : "disabled"}>Reject${n ? ` ${n}` : ""}</button>
-          <button class="btn sm primary" type="button" data-act="q-approve-sel" ${n ? "" : "disabled"}>Approve${n ? ` ${n}` : ""}</button>
+          <label class="pick-all"><input type="checkbox" id="q-all" ${n === list.length ? "checked" : ""}>Seleziona tutto</label>
+          <button class="btn sm danger" type="button" data-act="q-reject-sel" ${n ? "" : "disabled"}>Rifiuta${n ? ` ${n}` : ""}</button>
+          <button class="btn sm primary" type="button" data-act="q-approve-sel" ${n ? "" : "disabled"}>Approva${n ? ` ${n}` : ""}</button>
         </div>
       </div>
       <ul class="q-list">${list.map((s) => {
         const by = accountName(s.by);
         return `<li class="q-row${ui.qSel.has(s.id) ? " sel" : ""}">
-          <input type="checkbox" class="q-pick" data-id="${s.id}" aria-label="Select ${esc(personName(s.personId))}, ${esc(fmtShort(s.date))}" ${ui.qSel.has(s.id) ? "checked" : ""}>
+          <input type="checkbox" class="q-pick" data-id="${s.id}" aria-label="Seleziona ${esc(personName(s.personId))}, ${esc(fmtShort(s.date))}" ${ui.qSel.has(s.id) ? "checked" : ""}>
           <div class="q-main">
             <div class="q-top"><b>${esc(personName(s.personId))}</b><span class="mono">${hrs(s.hours)}</span></div>
             <div class="q-sub">${[fmtShort(s.date), s.start && s.end ? `${esc(s.start)}–${esc(s.end)}` : "", esc(s.job || ""), esc(s.location || "")].filter(Boolean).join(" · ")}</div>
-            <div class="q-by">${by ? `Logged by ${esc(by)}` : "Logged by staff"} · ${ago(s.updatedAt || s.createdAt)} ${unsyncedTag("shifts", s.id)}</div>
+            <div class="q-by">${by ? `Registrate da ${esc(by)}` : "Registrate dallo staff"} · ${ago(s.updatedAt || s.createdAt)} ${unsyncedTag("shifts", s.id)}</div>
           </div>
           <div class="q-acts">
-            <button class="btn sm quiet" type="button" data-act="edit-shift" data-id="${s.id}">Edit</button>
-            <button class="btn sm danger" type="button" data-act="q-reject" data-id="${s.id}">Reject</button>
-            <button class="btn sm ok" type="button" data-act="q-approve" data-id="${s.id}">Approve</button>
+            <button class="btn sm quiet" type="button" data-act="edit-shift" data-id="${s.id}">Modifica</button>
+            <button class="btn sm danger" type="button" data-act="q-reject" data-id="${s.id}">Rifiuta</button>
+            <button class="btn sm ok" type="button" data-act="q-approve" data-id="${s.id}">Approva</button>
           </div>
         </li>`;
       }).join("")}</ul>
@@ -1493,16 +1496,16 @@ ${docCss()}
     if (!list.length) return;
     await saveMany("shifts", list.map((s) => ({ ...s, approval: "approved", approvalNote: "", approvedBy: me.id, approvedAt: Date.now() })));
     ids.forEach((id) => ui.qSel.delete(id)); renderQueue();
-    toast(list.length === 1 ? `${hrs(list[0].hours)} approved for ${personName(list[0].personId)}` : `${list.length} entries approved`);
+    toast(list.length === 1 ? `${hrs(list[0].hours)} approvate per ${personName(list[0].personId)}` : `${list.length} voci approvate`);
   }
   let rejectIds = [];
   function openReject(ids) {
     rejectIds = ids.filter((id) => state.shifts.some((s) => s.id === id));
     if (!rejectIds.length) return;
     const one = rejectIds.length === 1 ? state.shifts.find((s) => s.id === rejectIds[0]) : null;
-    $("#rj-title").textContent = one ? `Reject ${hrs(one.hours)} for ${personName(one.personId)}` : `Reject ${rejectIds.length} entries`;
-    $("#rj-what").textContent = one ? [fmtDate(one.date), one.job, one.location].filter(Boolean).join(" · ") : "They stay on the hours list, marked rejected, and don't count toward what's owed.";
-    $("#rj-btn").textContent = one ? "Reject" : `Reject ${rejectIds.length}`;
+    $("#rj-title").textContent = one ? `Rifiuta ${hrs(one.hours)} per ${personName(one.personId)}` : `Rifiuta ${rejectIds.length} voci`;
+    $("#rj-what").textContent = one ? [fmtDate(one.date), one.job, one.location].filter(Boolean).join(" · ") : "Restano nell'elenco delle ore, segnate come rifiutate, e non contano nel dovuto.";
+    $("#rj-btn").textContent = one ? "Rifiuta" : `Rifiuta ${rejectIds.length}`;
     $("#rj-note").value = ""; showErr($("#rj-err"), "");
     openSheet("#d-reject"); $("#rj-note").focus();
   }
@@ -1514,7 +1517,7 @@ ${docCss()}
       await saveMany("shifts", list.map((s) => ({ ...s, approval: "rejected", approvalNote: note, approvedBy: me.id, approvedAt: Date.now() })));
       rejectIds.forEach((id) => ui.qSel.delete(id));
       $("#d-reject").close(); renderQueue();
-      toast(list.length === 1 ? "Rejected. They'll see your note." : `${list.length} entries rejected`);
+      toast(list.length === 1 ? "Rifiutato. Vedrà la tua nota." : `${list.length} voci rifiutate`);
     });
   });
 
@@ -1533,8 +1536,8 @@ ${docCss()}
     for (const [, loc] of used) { const k = loc.trim().toLowerCase(); if (!k || seen.has(k)) continue; seen.add(k); recent.push(loc.trim()); if (recent.length >= 5) break; }
     const box = $("#lf-places");
     box.hidden = !saved.length && !recent.length;
-    box.innerHTML = (saved.length ? `<div class="places-group"><span class="eyebrow">Saved places</span><div class="chips">${saved.map((n) => placeChip(n, n.trim().toLowerCase() === cur)).join("")}</div></div>` : "")
-      + (recent.length ? `<div class="places-group"><span class="eyebrow">Recently used</span><div class="chips">${recent.map((n) => placeChip(n, n.toLowerCase() === cur)).join("")}</div></div>` : "");
+    box.innerHTML = (saved.length ? `<div class="places-group"><span class="eyebrow">Luoghi salvati</span><div class="chips">${saved.map((n) => placeChip(n, n.trim().toLowerCase() === cur)).join("")}</div></div>` : "")
+      + (recent.length ? `<div class="places-group"><span class="eyebrow">Usati di recente</span><div class="chips">${recent.map((n) => placeChip(n, n.toLowerCase() === cur)).join("")}</div></div>` : "");
   }
   // One tap checks in.
   $("#lf-places").addEventListener("click", (e) => {
@@ -1545,12 +1548,12 @@ ${docCss()}
   function placesPanel() {
     const list = state.places.slice().sort(byName);
     return `<section class="panel">
-      <h2>Saved places</h2>
-      <p>Studios and venues the team goes to often. They show as one-tap buttons when someone checks in.</p>
-      ${list.length ? `<div class="chips">${list.map((pl) => `<span class="chip static">${ICON.pin}<span>${esc(pl.name)}</span><button type="button" class="chip-x" data-act="place-del" data-id="${pl.id}" aria-label="Remove ${esc(pl.name)}">Remove</button></span>`).join("")}</div>` : ""}
+      <h2>Luoghi salvati</h2>
+      <p>Studi e location dove il team va spesso. Compaiono come pulsanti rapidi quando qualcuno segnala la propria posizione.</p>
+      ${list.length ? `<div class="chips">${list.map((pl) => `<span class="chip static">${ICON.pin}<span>${esc(pl.name)}</span><button type="button" class="chip-x" data-act="place-del" data-id="${pl.id}" aria-label="Rimuovi ${esc(pl.name)}">Rimuovi</button></span>`).join("")}</div>` : ""}
       <form class="inline-add" id="place-form" novalidate>
-        <input class="input" id="place-name" maxlength="120" autocomplete="off" placeholder="Studio 3, Via Tortona" aria-label="New place" value="${esc(ui.placeDraft || "")}">
-        <button class="btn" type="submit">Add place</button>
+        <input class="input" id="place-name" maxlength="120" autocomplete="off" placeholder="Studio 3, Via Tortona" aria-label="Nuovo luogo" value="${esc(ui.placeDraft || "")}">
+        <button class="btn" type="submit">Aggiungi luogo</button>
       </form>
     </section>`;
   }
@@ -1559,10 +1562,10 @@ ${docCss()}
   const act = { entries: [], next: null, loading: false, err: null, loaded: false };
   function activityShell() {
     const people = state.people.slice().sort(byName);
-    return `<div class="view-head"><div><h2>Activity</h2><p>Who did what, newest first. The server records every change; nobody can edit this list.</p></div>
+    return `<div class="view-head"><div><h2>Attività</h2><p>Chi ha fatto cosa, dalle più recenti. Il server registra ogni modifica; nessuno può modificare questo elenco.</p></div>
       <div class="view-actions act-filters">
-        <select id="act-person" aria-label="About">${`<option value="">About anyone</option>` + people.map((p) => `<option value="${p.id}" ${ui.actPerson === p.id ? "selected" : ""}>${esc(p.name)}</option>`).join("")}</select>
-        <select id="act-user" aria-label="Done by">${`<option value="">By anyone</option>` + (accounts || []).map((a) => `<option value="${a.id}" ${ui.actUser === a.id ? "selected" : ""}>${esc(a.name)}</option>`).join("")}</select>
+        <select id="act-person" aria-label="Riguardo a">${`<option value="">Riguardo a chiunque</option>` + people.map((p) => `<option value="${p.id}" ${ui.actPerson === p.id ? "selected" : ""}>${esc(p.name)}</option>`).join("")}</select>
+        <select id="act-user" aria-label="Fatto da">${`<option value="">Fatto da chiunque</option>` + (accounts || []).map((a) => `<option value="${a.id}" ${ui.actUser === a.id ? "selected" : ""}>${esc(a.name)}</option>`).join("")}</select>
       </div></div>
       <div id="act-list"></div>`;
   }
@@ -1576,63 +1579,63 @@ ${docCss()}
       if (more && act.next) qs.set("before", act.next);
       const r = await api("/api/audit?" + qs, { method: "GET" });
       act.entries = more ? [...act.entries, ...r.entries] : r.entries; act.next = r.next; act.err = null;
-    } catch (e) { act.err = e.status ? e.msg : "Connect to the internet to see the activity."; }
+    } catch (e) { act.err = e.status ? e.msg : "Connettiti a internet per vedere l'attività."; }
     act.loading = false; act.loaded = true; paintActivity();
   }
   function actPerson(e) {
     const name = state.people.find((p) => p.id === e.personId)?.name || e.personName;
-    return name ? `<b>${esc(name)}</b>` : "someone";
+    return name ? `<b>${esc(name)}</b>` : "qualcuno";
   }
   function actText(e) {
-    // "Sara logged 8.5 h for themselves" rather than repeating her name.
+    // "Sara ha registrato 8,5 h per sé" rather than repeating her name.
     const own = /^(shift|receipt)\.|^person\.checkin$/.test(e.verb);
     const self = own && !!e.personId && accounts?.find((a) => a.id === e.userId)?.personId === e.personId;
-    const i = e.info || {}, P = self ? "themselves" : actPerson(e), Ps = self ? "their" : `${actPerson(e)}'s`, T = `<b>${esc(i.target || "a login")}</b>`;
+    const i = e.info || {}, X = actPerson(e), P = self ? "sé" : X, Di = self ? "" : ` di ${X}`, T = `<b>${esc(i.target || "qualcuno")}</b>`;
     const H = `<span class="mono">${hrs(i.hours)}</span>`, M = `<span class="mono">${money(i.amount)}</span>`;
     const on = i.date ? ` · ${fmtShort(i.date)}` : "";
     const t = {
-      "shift.add": `logged ${H} for ${P}${on}${i.pending ? ` <span class="pill wait">Waiting</span>` : ""}`,
-      "shift.edit": `changed ${Ps} hours to ${H}${on}${i.reopened ? ` <span class="pill wait">Back to waiting</span>` : ""}`,
-      "shift.delete": `deleted ${H} for ${P}${on}`,
-      "shift.approve": `approved ${H} for ${P}${on}`,
-      "shift.reject": `rejected ${H} for ${P}${on}${i.note ? ` <span class="muted">“${esc(i.note)}”</span>` : ""}`,
-      "receipt.add": `added a ${M} ${i.category ? esc(catLabel(i.category).toLowerCase()) + " " : ""}receipt for ${P}`,
-      "receipt.edit": `edited a ${M} receipt for ${P}`,
-      "receipt.delete": `deleted a ${M} receipt for ${P}`,
-      "receipt.reimburse": `marked ${Ps} ${M} receipt reimbursed`,
-      "receipt.unreimburse": `put ${Ps} ${M} receipt back to reimburse`,
-      "payment.add": `recorded a ${M} payment to ${P}`,
-      "payment.edit": `edited a ${M} payment to ${P}`,
-      "payment.delete": `deleted a ${M} payment to ${P}`,
-      "person.add": `added ${P} to the board`,
-      "person.edit": `updated ${P}'s details`,
-      "person.rate": `set ${P}'s rate to <span class="mono">${money(i.rate)}</span> / h`,
-      "person.checkin": i.location ? (self ? `checked in at ${esc(i.location)}` : `checked ${P} in at ${esc(i.location)}`) : `cleared ${Ps} location`,
-      "person.delete": `removed ${P} from the board`,
-      "settings.edit": `set the currency to ${esc(i.currency || "")}`,
-      "place.add": `saved the place ${esc(i.name || "")}`,
-      "place.edit": `renamed a saved place to ${esc(i.name || "")}`,
-      "place.delete": `removed the saved place ${esc(i.name || "")}`,
-      "account.add": `created a ${i.role === "admin" ? "admin" : "staff"} login for ${T}`,
-      "account.link": `linked ${T}'s login to ${P}`,
-      "account.unlink": `unlinked ${T}'s login from ${P}`,
-      "account.role": `made ${T} ${i.role === "admin" ? "an admin" : "staff"}`,
-      "account.disable": `disabled ${T}'s login`,
-      "account.enable": `enabled ${T}'s login`,
-      "account.password": `reset ${T}'s password`,
+      "shift.add": `ha registrato ${H} per ${P}${on}${i.pending ? ` <span class="pill wait">In attesa</span>` : ""}`,
+      "shift.edit": `ha modificato ${self ? "le proprie ore" : `le ore di ${X}`} in ${H}${on}${i.reopened ? ` <span class="pill wait">Di nuovo in attesa</span>` : ""}`,
+      "shift.delete": `ha eliminato ${H} per ${P}${on}`,
+      "shift.approve": `ha approvato ${H} per ${P}${on}`,
+      "shift.reject": `ha rifiutato ${H} per ${P}${on}${i.note ? ` <span class="muted">“${esc(i.note)}”</span>` : ""}`,
+      "receipt.add": `ha aggiunto una ricevuta da ${M}${i.category ? ` (${esc(catLabel(i.category).toLowerCase())})` : ""} per ${P}`,
+      "receipt.edit": `ha modificato una ricevuta da ${M} per ${P}`,
+      "receipt.delete": `ha eliminato una ricevuta da ${M} per ${P}`,
+      "receipt.reimburse": `ha segnato come rimborsata ${self ? "la propria ricevuta" : "la ricevuta"} da ${M}${Di}`,
+      "receipt.unreimburse": `ha rimesso da rimborsare ${self ? "la propria ricevuta" : "la ricevuta"} da ${M}${Di}`,
+      "payment.add": `ha registrato un pagamento di ${M} a ${P}`,
+      "payment.edit": `ha modificato un pagamento di ${M} a ${P}`,
+      "payment.delete": `ha eliminato un pagamento di ${M} a ${P}`,
+      "person.add": `ha aggiunto ${P} al team`,
+      "person.edit": `ha aggiornato i dati di ${P}`,
+      "person.rate": `ha impostato la tariffa di ${P} a <span class="mono">${money(i.rate)}</span> / h`,
+      "person.checkin": i.location ? (self ? `ha segnalato la propria posizione: ${esc(i.location)}` : `ha segnalato ${X} a ${esc(i.location)}`) : `ha cancellato ${self ? "la propria posizione" : `la posizione di ${X}`}`,
+      "person.delete": `ha rimosso ${P} dal team`,
+      "settings.edit": `ha impostato la valuta su ${esc(i.currency || "")}`,
+      "place.add": `ha salvato il luogo ${esc(i.name || "")}`,
+      "place.edit": `ha rinominato un luogo salvato in ${esc(i.name || "")}`,
+      "place.delete": `ha rimosso il luogo salvato ${esc(i.name || "")}`,
+      "account.add": `ha creato un accesso ${i.role === "admin" ? "amministratore" : "staff"} per ${T}`,
+      "account.link": `ha collegato l'accesso di ${T} a ${P}`,
+      "account.unlink": `ha scollegato l'accesso di ${T} da ${P}`,
+      "account.role": `ha reso ${T} ${i.role === "admin" ? "amministratore" : "staff"}`,
+      "account.disable": `ha disattivato l'accesso di ${T}`,
+      "account.enable": `ha riattivato l'accesso di ${T}`,
+      "account.password": `ha reimpostato la password di ${T}`,
     }[e.verb] || esc(e.verb);
-    return `<b>${esc(e.actor || "Someone")}</b> ${t}`;
+    return `<b>${esc(e.actor || "Qualcuno")}</b> ${t}`;
   }
   const actTone = (v) => v === "shift.approve" || v === "receipt.reimburse" ? "ok" : v === "shift.reject" || v.endsWith(".delete") ? "risk" : v.startsWith("payment") ? "money" : v === "shift.add" || v === "receipt.add" ? "new" : "";
   function dayLabel(ms) {
     const d = isoDay(new Date(ms)), today = isoDay(), y = isoDay(new Date(Date.now() - 864e5));
-    return d === today ? "Today" : d === y ? "Yesterday" : fmtShort(d);
+    return d === today ? "Oggi" : d === y ? "Ieri" : fmtShort(d);
   }
   function paintActivity() {
     const el = $("#act-list"); if (!el) return;
     if (!act.loaded && !act.loading) { loadActivity(false); return; }
     if (act.err && !act.entries.length) { el.innerHTML = `<p class="err">${esc(act.err)}</p>`; return; }
-    if (!act.entries.length) { el.innerHTML = act.loading ? `<p class="muted">Loading…</p>` : `<p class="muted">Nothing yet. Changes appear here as people log hours, add receipts and record payments.</p>`; return; }
+    if (!act.entries.length) { el.innerHTML = act.loading ? `<p class="muted">Caricamento…</p>` : `<p class="muted">Ancora niente. Le modifiche compaiono qui man mano che si registrano ore, ricevute e pagamenti.</p>`; return; }
     let day = "", html = "";
     for (const e of act.entries) {
       const dl = dayLabel(e.at);
@@ -1640,7 +1643,7 @@ ${docCss()}
       html += `<li class="act-row"><span class="act-dot ${actTone(e.verb)}" aria-hidden="true"></span><span class="act-txt">${actText(e)}</span><time datetime="${new Date(e.at).toISOString()}" title="${esc(new Date(e.at).toLocaleString(locale))}">${Date.now() - e.at < 864e5 ? ago(e.at) : new Date(e.at).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })}</time></li>`;
     }
     html += `</ol>`;
-    if (act.next) html += `<div class="act-more"><button class="btn" type="button" data-act="act-more" ${act.loading ? "disabled" : ""}>${act.loading ? "Loading…" : "Show older"}</button></div>`;
+    if (act.next) html += `<div class="act-more"><button class="btn" type="button" data-act="act-more" ${act.loading ? "disabled" : ""}>${act.loading ? "Caricamento…" : "Mostra precedenti"}</button></div>`;
     if (act.err) html += `<p class="err">${esc(act.err)}</p>`;
     el.innerHTML = html;
   }
@@ -1651,9 +1654,9 @@ ${docCss()}
         await api("/api/users/" + id, { body: { personId } });
         if (id === me.id) { me = { ...me, personId }; await meta.set("me", me); }
         const a = accounts.find((x) => x.id === id);
-        toast(personId ? `${a?.name || "Login"} linked to ${personName(personId)}` : `${a?.name || "Login"} unlinked`);
+        toast(personId ? `${a?.name || "Accesso"} collegato a ${personName(personId)}` : `${a?.name || "Accesso"} scollegato`);
         act.loaded = false;
-      } catch (err) { toast(err.msg || "Connect to the internet to change links."); }
+      } catch (err) { toast(err.msg || "Connettiti a internet per modificare i collegamenti."); }
       loadAccounts();
     }));
     $("#place-name").addEventListener("input", (e) => (ui.placeDraft = e.target.value));
@@ -1661,10 +1664,10 @@ ${docCss()}
       e.preventDefault();
       const name = $("#place-name").value.trim().replace(/\s+/g, " ").slice(0, 120);
       if (!name) return $("#place-name").focus();
-      if (state.places.some((p) => (p.name || "").toLowerCase() === name.toLowerCase())) return toast("That place is already saved");
+      if (state.places.some((p) => (p.name || "").toLowerCase() === name.toLowerCase())) return toast("Questo luogo è già salvato");
       ui.placeDraft = "";
       await save("places", { name });
-      toast(`${name} saved`);
+      toast(`${name} salvato`);
       $("#place-name")?.focus();
     });
     $("#act-person").addEventListener("change", (e) => { ui.actPerson = e.target.value; act.loaded = false; act.entries = []; paintActivity(); });
@@ -1681,12 +1684,12 @@ ${docCss()}
   }
   $$("[data-export]").forEach((btn) => btn.addEventListener("click", () => {
     const kind = btn.dataset.export;
-    if (kind === "hours") download(`hours-${ui.hMonth || "all"}.csv`, [["Date", "Person", "Role", "Job", "Location", "Call", "Wrap", "Hours", "Rate", "Earned", "Pay type", "Day rate", "Regular hours", "Overtime hours", "Overtime ×", "Pay basis", "Approval"],
-      ...shiftsShown().map((s) => { const p = state.people.find((x) => x.id === s.personId), t = shiftTerms(s), pay = shiftPay(s); return [s.date, p?.name, roleLabel(p?.role), s.job, s.location, s.start, s.end, s.hours, t.rate, round2(pay.amount), t.payType, t.dayRate || "", round2(pay.regularHours), round2(pay.overtimeHours), t.otAfter ? t.otMult : "", payExplain(s.hours, t, false), { approved: "Approved", pending: "Waiting for approval", rejected: "Rejected" }[approvalOf(s)]]; })]);
-    else if (kind === "receipts") download(`receipts-${isoDay()}.csv`, [["Date", "Person", "Category", "Description", "Amount", "Status", "Reimbursed on"],
-      ...receiptsShown().map((r) => [r.date, personName(r.personId), catLabel(catOf(r)), r.description, r.amount, r.status === "reimbursed" ? "Reimbursed" : "To reimburse", r.reimbursedAt || ""])]);
-    else download(`payments-${isoDay()}.csv`, [["Date", "Person", "Method", "Note", "Wages", "Receipts", "Total"],
-      ...state.payments.filter((p) => !ui.pPerson || p.personId === ui.pPerson).sort((a, b) => (b.date || "").localeCompare(a.date || "")).map((p) => [p.date, personName(p.personId), p.method, p.note, p.amount, p.receiptsAmount || 0, round2((p.amount || 0) + (p.receiptsAmount || 0))])]);
+    if (kind === "hours") download(`ore-${ui.hMonth || "tutte"}.csv`, [["Data", "Persona", "Ruolo", "Lavoro", "Posizione", "Convocazione", "Fine", "Ore", "Tariffa", "Guadagnato", "Tipo di paga", "Tariffa giornaliera", "Ore ordinarie", "Ore di straordinario", "Straordinario ×", "Base di calcolo", "Approvazione"],
+      ...shiftsShown().map((s) => { const p = state.people.find((x) => x.id === s.personId), t = shiftTerms(s), pay = shiftPay(s); return [s.date, p?.name, roleLabel(p?.role), s.job, s.location, s.start, s.end, s.hours, t.rate, round2(pay.amount), t.payType === "day" ? "Giornaliera" : "Oraria", t.dayRate || "", round2(pay.regularHours), round2(pay.overtimeHours), t.otAfter ? t.otMult : "", payExplain(s.hours, t, false), { approved: "Approvato", pending: "In attesa di approvazione", rejected: "Rifiutato" }[approvalOf(s)]]; })]);
+    else if (kind === "receipts") download(`ricevute-${isoDay()}.csv`, [["Data", "Persona", "Categoria", "Descrizione", "Importo", "Stato", "Rimborsato il"],
+      ...receiptsShown().map((r) => [r.date, personName(r.personId), catLabel(catOf(r)), r.description, r.amount, r.status === "reimbursed" ? "Rimborsato" : "Da rimborsare", r.reimbursedAt || ""])]);
+    else download(`pagamenti-${isoDay()}.csv`, [["Data", "Persona", "Metodo", "Nota", "Compensi", "Ricevute", "Totale"],
+      ...state.payments.filter((p) => !ui.pPerson || p.personId === ui.pPerson).sort((a, b) => (b.date || "").localeCompare(a.date || "")).map((p) => [p.date, personName(p.personId), methodLabel(p.method), p.note, p.amount, p.receiptsAmount || 0, round2((p.amount || 0) + (p.receiptsAmount || 0))])]);
   }));
 
   // ---------- Jobs (bookings) & client billing ----------
@@ -1698,12 +1701,12 @@ ${docCss()}
   const jui = { view: "list", q: "", pastOpen: false };
   let jobOpenId = null, editingJob = null, shiftFromJob = null;
   const CAL = `<svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 9.5h17M8 3v4M16 3v4"/></svg>`;
-  const INV = { "not invoiced": "Not invoiced", invoiced: "Invoiced", paid: "Paid" };
+  const INV = { "not invoiced": "Non fatturato", invoiced: "Fatturato", paid: "Pagato" };
   const jobEnd = (j) => (j.endDate && j.endDate > j.date ? j.endDate : j.date || "");
   const jobOn = (j, day) => !!j.date && j.date <= day && day <= jobEnd(j);
   const addDays = (iso, n) => { const [y, m, d] = iso.split("-").map(Number); return isoDay(new Date(y, m - 1, d + n)); };
-  const jobName = (j) => j.title || j.client || "Untitled job";
-  const jobLabel = (j) => [j.title, j.client].filter(Boolean).join(" · ") || "Untitled job";
+  const jobName = (j) => j.title || j.client || "Lavoro senza titolo";
+  const jobLabel = (j) => [j.title, j.client].filter(Boolean).join(" · ") || "Lavoro senza titolo";
   const jobRange = (j) => (jobEnd(j) > j.date ? `${fmtShort(j.date)} – ${fmtShort(jobEnd(j))}` : fmtShort(j.date));
   const invOf = (j) => (INV[j.invoiceStatus] ? j.invoiceStatus : "not invoiced");
   const crewOf = (j) => (j.people || []).filter((id) => state.people.some((p) => p.id === id));
@@ -1725,9 +1728,9 @@ ${docCss()}
   const billedLabel = (j, mm) => (j.billing === "hourly" && !mm.hours ? `${money(j.clientRate)} / h` : money(mm.billed));
   function invPill(j) {
     const st = invOf(j);
-    if (st === "paid") return `<span class="pill paid">Paid</span>`;
-    if (st === "invoiced") return `<span class="pill inv">Invoiced</span>`;
-    return jobEnd(j) < isoDay() ? `<span class="pill owed">To invoice</span>` : `<span class="pill wait">Not invoiced</span>`;
+    if (st === "paid") return `<span class="pill paid">Pagato</span>`;
+    if (st === "invoiced") return `<span class="pill inv">Fatturato</span>`;
+    return jobEnd(j) < isoDay() ? `<span class="pill owed">Da fatturare</span>` : `<span class="pill wait">Non fatturato</span>`;
   }
 
   // The board: a person's booking today, or their next one.
@@ -1738,14 +1741,14 @@ ${docCss()}
   function bookingLine(pid) {
     const j = nextBooking(pid); if (!j) return "";
     const today = isoDay(), on = jobOn(j, today);
-    const when = (on ? "Booked today" : j.date === addDays(today, 1) ? "Booked tomorrow" : `Next booking · ${fmtShort(j.date)}`) + (j.call ? ` · call ${esc(j.call)}` : "");
+    const when = (on ? "Prenotato oggi" : j.date === addDays(today, 1) ? "Prenotato domani" : `Prossimo lavoro · ${fmtShort(j.date)}`) + (j.call ? ` · convocazione ${esc(j.call)}` : "");
     const what = [jobName(j), j.location].filter(Boolean).map(esc).join(", ");
     return `<button class="booked ${on ? "on" : ""}" type="button" data-act="job-open" data-id="${j.id}">${CAL}<span class="txt"><span class="bk-when">${when}</span><span class="bk-what">${what}</span></span></button>`;
   }
   function bookedTodayNote() {
     const today = isoDay(), ids = new Set();
     for (const j of state.jobs) if (jobOn(j, today)) for (const id of crewOf(j)) ids.add(id);
-    return ids.size ? ` · ${ids.size} booked` : "";
+    return ids.size ? ` · ${ids.size} ${ids.size === 1 ? "prenotato" : "prenotati"}` : "";
   }
 
   function renderJobsHook() {
@@ -1764,15 +1767,15 @@ ${docCss()}
     $$("#job-seg button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.jv === jui.view)));
     if (!state.jobs.length) {
       el.innerHTML = isAdmin()
-        ? empty("No jobs booked yet", "Add a job with the client, date, call time and location, then book people on it. It shows on their card on the board, and hours can be logged straight from it.", "job-add", "Book the first job")
-        : empty("No jobs booked yet", "Jobs appear here once an admin books them.");
+        ? empty("Ancora nessun lavoro prenotato", "Aggiungi un lavoro con cliente, data, orario di convocazione e posizione, poi prenota le persone. Compare sulla loro scheda nel team e le ore si possono registrare direttamente da lì.", "job-add", "Prenota il primo lavoro")
+        : empty("Ancora nessun lavoro prenotato", "I lavori compaiono qui quando un amministratore li prenota.");
       return;
     }
     if (jui.view === "clients") return renderClients(el);
     const list = jobsMatching();
-    if (!list.length) { el.innerHTML = empty("No jobs match", "Try a different search."); return; }
+    if (!list.length) { el.innerHTML = empty("Nessun lavoro corrisponde", "Prova un'altra ricerca."); return; }
     const today = isoDay(), tmw = addDays(today, 1), week = addDays(today, 7);
-    const groups = [["Today", []], ["Tomorrow", []], ["This week", []], ["Later", []]], past = [];
+    const groups = [["Oggi", []], ["Domani", []], ["Questa settimana", []], ["Più avanti", []]], past = [];
     for (const j of list.sort(byStart)) {
       if (jobEnd(j) < today) past.push(j);
       else if (jobOn(j, today)) groups[0][1].push(j);
@@ -1783,14 +1786,14 @@ ${docCss()}
     past.reverse();
     const up = groups.filter((g) => g[1].length);
     el.innerHTML = (up.length ? up.map(([t, js]) => `<section class="jgroup"><h2 class="jgroup-h">${t}<b>${js.length}</b></h2><div class="jlist">${js.map(jobCard).join("")}</div></section>`).join("")
-      : `<p class="totals-line">Nothing booked from today on.</p>`)
-      + (past.length ? `<details class="jpast" ${jui.pastOpen || (jui.q && !up.length) ? "open" : ""}><summary class="jgroup-h">Past jobs<b>${past.length}</b></summary><div class="jlist">${past.map(jobCard).join("")}</div></details>` : "");
+      : `<p class="totals-line">Nessun lavoro prenotato da oggi in poi.</p>`)
+      + (past.length ? `<details class="jpast" ${jui.pastOpen || (jui.q && !up.length) ? "open" : ""}><summary class="jgroup-h">Lavori passati<b>${past.length}</b></summary><div class="jlist">${past.map(jobCard).join("")}</div></details>` : "");
   }
 
   function jobCard(j) {
     const today = isoDay(), on = jobOn(j, today), [y, m, d] = (j.date || "").split("-").map(Number);
     const dt = new Date(y, (m || 1) - 1, d || 1), crew = crewOf(j);
-    const meta = [jobEnd(j) > j.date ? `Until ${fmtShort(jobEnd(j))}` : "", j.call ? `Call ${esc(j.call)}` : "", esc(j.location || "")].filter(Boolean).join(" · ");
+    const meta = [jobEnd(j) > j.date ? `Fino a ${fmtShort(jobEnd(j))}` : "", j.call ? `Convocazione ${esc(j.call)}` : "", esc(j.location || "")].filter(Boolean).join(" · ");
     const bill = isAdmin() ? `<span class="jmoney"><b>${billedLabel(j, jobMoney(j))}</b>${invPill(j)}</span>` : "";
     return `<button class="jcard ${on ? "on" : ""} ${jobEnd(j) < today ? "past" : ""}" type="button" data-act="job-open" data-id="${j.id}">
       <span class="jdate"><span>${dt.toLocaleDateString(locale, { weekday: "short" })}</span><b>${d || "?"}</b><span>${dt.toLocaleDateString(locale, { month: "short" })}</span></span>
@@ -1798,7 +1801,7 @@ ${docCss()}
         ${j.client && j.title ? `<span class="jclient">${esc(j.client)}</span>` : ""}
         <span class="jtitle">${esc(jobName(j))}</span>
         ${meta ? `<span class="jmeta">${meta}</span>` : ""}
-        <span class="jcrew">${crew.length ? crew.map((id) => `<span class="crew-chip">${esc(personName(id))}</span>`).join("") : `<span class="muted">No one booked yet</span>`}${unsyncedTag("jobs", j.id)}</span>
+        <span class="jcrew">${crew.length ? crew.map((id) => `<span class="crew-chip">${esc(personName(id))}</span>`).join("") : `<span class="muted">Ancora nessuno prenotato</span>`}${unsyncedTag("jobs", j.id)}</span>
       </span>${bill}
     </button>`;
   }
@@ -1808,33 +1811,33 @@ ${docCss()}
     let billed = 0, cost = 0, awaiting = 0, toInv = 0;
     const today = isoDay();
     for (const j of jobsMatching()) {
-      const k = (j.client || "").trim() || "No client", mm = jobMoney(j);
+      const k = (j.client || "").trim() || "Nessun cliente", mm = jobMoney(j);
       if (!by.has(k)) by.set(k, { name: k, jobs: [], billed: 0, cost: 0 });
       const c = by.get(k); c.jobs.push([j, mm]); c.billed += mm.billed; c.cost += mm.cost;
       billed += mm.billed; cost += mm.cost;
       if (invOf(j) === "invoiced") awaiting += mm.billed;
       if (invOf(j) === "not invoiced" && jobEnd(j) < today) toInv++;
     }
-    if (!by.size) { el.innerHTML = empty("No clients match", "Try a different search."); return; }
+    if (!by.size) { el.innerHTML = empty("Nessun cliente corrisponde", "Prova un'altra ricerca."); return; }
     const margin = round2(billed - cost), n = [...by.values()].reduce((a, c) => a + c.jobs.length, 0);
-    const pct = (mg, b) => (b > 0.004 ? `${Math.round((mg / b) * 100)}% of billed` : "");
+    const pct = (mg, b) => (b > 0.004 ? `${Math.round((mg / b) * 100)}% del fatturato` : "");
     el.innerHTML = `<div class="summary">
-        <div><span class="eyebrow">Margin</span><span class="big ${margin < -0.004 ? "neg" : "ink"}">${money(margin)}</span><span class="note">${pct(margin, billed) || "Nothing billed yet"}</span></div>
-        <div><span class="eyebrow">Billed</span><span class="mid">${money(billed)}</span><span class="note">${n} ${n === 1 ? "job" : "jobs"}</span></div>
-        <div><span class="eyebrow">Cost</span><span class="mid">${money(cost)}</span><span class="note">Wages and receipts</span></div>
-        <div><span class="eyebrow">Awaiting payment</span><span class="mid">${money(awaiting)}</span><span class="note">${toInv ? `${toInv} past ${toInv === 1 ? "job" : "jobs"} to invoice` : "Nothing left to invoice"}</span></div>
+        <div><span class="eyebrow">Margine</span><span class="big ${margin < -0.004 ? "neg" : "ink"}">${money(margin)}</span><span class="note">${pct(margin, billed) || "Ancora niente fatturato"}</span></div>
+        <div><span class="eyebrow">Fatturato</span><span class="mid">${money(billed)}</span><span class="note">${n} ${n === 1 ? "lavoro" : "lavori"}</span></div>
+        <div><span class="eyebrow">Costo</span><span class="mid">${money(cost)}</span><span class="note">Compensi e ricevute</span></div>
+        <div><span class="eyebrow">In attesa di incasso</span><span class="mid">${money(awaiting)}</span><span class="note">${toInv ? (toInv === 1 ? "1 lavoro passato da fatturare" : `${toInv} lavori passati da fatturare`) : "Niente da fatturare"}</span></div>
       </div>
       <div class="clients">${[...by.values()].sort((a, b) => b.billed - a.billed || a.name.localeCompare(b.name, locale)).map((c) => {
         const mg = round2(c.billed - c.cost);
         return `<article class="client">
-          <div class="client-head"><h3>${esc(c.name)}</h3><span>${c.jobs.length} ${c.jobs.length === 1 ? "job" : "jobs"}</span></div>
+          <div class="client-head"><h3>${esc(c.name)}</h3><span>${c.jobs.length} ${c.jobs.length === 1 ? "lavoro" : "lavori"}</span></div>
           <div class="figs">
-            <div><span class="k">Billed</span><span class="v">${money(c.billed)}</span></div>
-            <div><span class="k">Cost</span><span class="v">${money(c.cost)}</span></div>
-            <div><span class="k">Margin</span><span class="v ${mg < -0.004 ? "neg" : ""}">${money(mg)}</span></div>
+            <div><span class="k">Fatturato</span><span class="v">${money(c.billed)}</span></div>
+            <div><span class="k">Costo</span><span class="v">${money(c.cost)}</span></div>
+            <div><span class="k">Margine</span><span class="v ${mg < -0.004 ? "neg" : ""}">${money(mg)}</span></div>
           </div>
           <div class="cjobs">${c.jobs.sort((a, b) => byStart(b[0], a[0])).map(([j, mm]) => `<button class="cj" type="button" data-act="job-open" data-id="${j.id}">
-            <span class="cj-t"><span class="cj-d">${fmtShort(j.date)}</span>${esc(j.title || "Untitled job")}</span>
+            <span class="cj-t"><span class="cj-d">${fmtShort(j.date)}</span>${esc(j.title || "Lavoro senza titolo")}</span>
             <span class="cj-r"><span class="cj-m">${billedLabel(j, mm)}</span>${invPill(j)}</span>
           </button>`).join("")}</div>
         </article>`;
@@ -1852,33 +1855,33 @@ ${docCss()}
     const st = invOf(j);
     $("#jd-body").innerHTML = `
       <dl class="kv">
-        <dt>Client</dt><dd>${esc(j.client || "—")}</dd>
-        <dt>When</dt><dd>${jobRange(j)}${jobOn(j, isoDay()) ? ` <span class="pill inv">Today</span>` : ""}</dd>
-        <dt>Call</dt><dd class="mono">${esc(j.call || "—")}</dd>
-        <dt>Location</dt><dd>${esc(j.location || "—")}</dd>
-        ${j.notes ? `<dt>Notes</dt><dd class="pre">${esc(j.notes)}</dd>` : ""}
+        <dt>Cliente</dt><dd>${esc(j.client || "—")}</dd>
+        <dt>Quando</dt><dd>${jobRange(j)}${jobOn(j, isoDay()) ? ` <span class="pill inv">Oggi</span>` : ""}</dd>
+        <dt>Convocazione</dt><dd class="mono">${esc(j.call || "—")}</dd>
+        <dt>Posizione</dt><dd>${esc(j.location || "—")}</dd>
+        ${j.notes ? `<dt>Note</dt><dd class="pre">${esc(j.notes)}</dd>` : ""}
       </dl>
       ${a ? `<div class="detail-figs jfigs">
-        <div><span class="eyebrow">Billed to client</span><span class="v">${money(mm.billed)}</span><span class="sub">${j.billing === "hourly" ? `${hrs(mm.hours)} × ${money(j.clientRate)}` : "Flat fee"}</span></div>
-        <div><span class="eyebrow">Cost</span><span class="v">${money(mm.cost)}</span><span class="sub">Wages ${money(mm.wages)} · receipts ${money(mm.exp)}</span></div>
-        <div><span class="eyebrow">Margin</span><span class="v ${mm.margin < -0.004 ? "neg" : "pos"}">${money(mm.margin)}</span><span class="sub">${mm.billed > 0.004 ? `${Math.round((mm.margin / mm.billed) * 100)}% of billed` : "Nothing billed yet"}</span></div>
+        <div><span class="eyebrow">Fatturato al cliente</span><span class="v">${money(mm.billed)}</span><span class="sub">${j.billing === "hourly" ? `${hrs(mm.hours)} × ${money(j.clientRate)}` : "Compenso fisso"}</span></div>
+        <div><span class="eyebrow">Costo</span><span class="v">${money(mm.cost)}</span><span class="sub">Compensi ${money(mm.wages)} · ricevute ${money(mm.exp)}</span></div>
+        <div><span class="eyebrow">Margine</span><span class="v ${mm.margin < -0.004 ? "neg" : "pos"}">${money(mm.margin)}</span><span class="sub">${mm.billed > 0.004 ? `${Math.round((mm.margin / mm.billed) * 100)}% del fatturato` : "Ancora niente fatturato"}</span></div>
       </div>
-      <div class="jinv"><span class="eyebrow">Invoice</span><div class="seg" role="group" aria-label="Invoice status">${Object.entries(INV).map(([v, l]) => `<button type="button" data-act="job-inv" data-id="${j.id}" data-v="${v}" aria-pressed="${st === v}">${l}</button>`).join("")}</div></div>` : ""}
-      <h4 class="eyebrow">Booked · ${crew.length}</h4>
+      <div class="jinv"><span class="eyebrow">Fattura</span><div class="seg" role="group" aria-label="Stato della fattura">${Object.entries(INV).map(([v, l]) => `<button type="button" data-act="job-inv" data-id="${j.id}" data-v="${v}" aria-pressed="${st === v}">${l}</button>`).join("")}</div></div>` : ""}
+      <h4 class="eyebrow">Prenotati · ${crew.length}</h4>
       ${crew.length ? `<div class="crew">${crew.map((pid) => {
         const p = state.people.find((x) => x.id === pid), h = hoursBy.get(pid) || 0;
-        return `<div class="crew-row"><div class="who"><button class="comp-name" type="button" data-act="detail" data-id="${pid}">${esc(p.name)}</button><span>${roleLabel(p.role)} · ${h ? hrs(h) + " logged" : "no hours logged"}</span></div>
-          <button class="btn sm" type="button" data-act="job-log" data-id="${j.id}" data-person="${pid}">${ICON.clock}Log hours</button></div>`;
-      }).join("")}</div>` : `<p class="muted">No one booked yet.${a ? " Edit the job to book people." : ""}</p>`}
-      <h4 class="eyebrow">Hours on this job · ${hrs(mm.hours)}</h4>
-      ${mm.shifts.length ? `<div class="tablebox"><table><thead><tr><th>Date</th><th>Person</th><th class="n">Call–wrap</th><th class="n">Hours</th><th class="n">Earned</th></tr></thead><tbody>
+        return `<div class="crew-row"><div class="who"><button class="comp-name" type="button" data-act="detail" data-id="${pid}">${esc(p.name)}</button><span>${roleLabel(p.role)} · ${h ? hrs(h) + " registrate" : "nessuna ora registrata"}</span></div>
+          <button class="btn sm" type="button" data-act="job-log" data-id="${j.id}" data-person="${pid}">${ICON.clock}Registra ore</button></div>`;
+      }).join("")}</div>` : `<p class="muted">Ancora nessuno prenotato.${a ? " Modifica il lavoro per prenotare le persone." : ""}</p>`}
+      <h4 class="eyebrow">Ore su questo lavoro · ${hrs(mm.hours)}</h4>
+      ${mm.shifts.length ? `<div class="tablebox"><table><thead><tr><th>Data</th><th>Persona</th><th class="n">Convocazione–fine</th><th class="n">Ore</th><th class="n">Guadagnato</th></tr></thead><tbody>
         ${mm.shifts.sort((x, y) => (y.date || "").localeCompare(x.date || "")).map((s) => `<tr><td>${fmtShort(s.date)}${unsyncedTag("shifts", s.id) ? `<span class="sub">${unsyncedTag("shifts", s.id)}</span>` : ""}</td><td class="who">${esc(personName(s.personId))}</td><td class="n">${s.start && s.end ? `${esc(s.start)}–${esc(s.end)}` : `<span class="muted">—</span>`}</td><td class="n">${hrs(s.hours)}</td><td class="n">${money(shiftCost(s))}</td></tr>`).join("")}
-      </tbody></table></div>` : `<p class="muted">No hours logged on this job yet.</p>`}
-      ${mm.recs.length ? `<h4 class="eyebrow">Receipts on this job · ${money(mm.exp)}</h4>
-      <div class="tablebox"><table><thead><tr><th>Date</th><th>For</th><th>Paid by</th><th class="n">Amount</th></tr></thead><tbody>
-        ${mm.recs.map((r) => `<tr><td>${fmtShort(r.date)}</td><td><button class="btn quiet sm" type="button" data-act="view-receipt" data-id="${r.id}">${esc(r.description || "Receipt")}</button></td><td>${esc(personName(r.personId))}</td><td class="n">${money(r.amount)}</td></tr>`).join("")}
+      </tbody></table></div>` : `<p class="muted">Ancora nessuna ora registrata su questo lavoro.</p>`}
+      ${mm.recs.length ? `<h4 class="eyebrow">Ricevute su questo lavoro · ${money(mm.exp)}</h4>
+      <div class="tablebox"><table><thead><tr><th>Data</th><th>Per</th><th>Pagato da</th><th class="n">Importo</th></tr></thead><tbody>
+        ${mm.recs.map((r) => `<tr><td>${fmtShort(r.date)}</td><td><button class="btn quiet sm" type="button" data-act="view-receipt" data-id="${r.id}">${esc(r.description || "Ricevuta")}</button></td><td>${esc(personName(r.personId))}</td><td class="n">${money(r.amount)}</td></tr>`).join("")}
       </tbody></table></div>` : ""}
-      ${a ? `<div class="sheet-foot"><button class="btn" type="button" data-act="job-edit" data-id="${j.id}">Edit job</button></div>` : ""}`;
+      ${a ? `<div class="sheet-foot"><button class="btn" type="button" data-act="job-edit" data-id="${j.id}">Modifica lavoro</button></div>` : ""}`;
   }
 
   // Job form (admins)
@@ -1886,7 +1889,7 @@ ${docCss()}
     if (!isAdmin()) return;
     editingJob = id || null;
     const j = state.jobs.find((x) => x.id === id) || {};
-    $("#jf-title").textContent = id ? "Edit job" : "New job";
+    $("#jf-title").textContent = id ? "Modifica lavoro" : "Nuovo lavoro";
     $("#jf-client").value = j.client || ""; $("#jf-name").value = j.title || "";
     $("#jf-date").value = j.date || isoDay(); $("#jf-end").value = j.endDate || ""; $("#jf-call").value = j.call || "";
     $("#jf-loc").value = j.location || ""; $("#jf-notes").value = j.notes || "";
@@ -1897,7 +1900,7 @@ ${docCss()}
     $("#jf-clients").innerHTML = [...new Set(state.jobs.map((x) => (x.client || "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, locale)).map((c) => `<option value="${esc(c)}"></option>`).join("");
     pickPeople(new Set(j.people || []));
     billingLabel();
-    $("#jf-del").hidden = !id; disarm($("#jf-del"), "Delete");
+    $("#jf-del").hidden = !id; disarm($("#jf-del"), "Elimina");
     showErr($("#jf-err"), "");
     openSheet("#d-jobform"); $("#jf-client").focus();
   }
@@ -1907,10 +1910,10 @@ ${docCss()}
     const people = state.people.slice().sort(byName);
     $("#jf-people").innerHTML = people.length ? people.map((p) => {
       const clash = date && state.jobs.find((o) => o.id !== editingJob && (o.people || []).includes(p.id) && o.date <= end && date <= jobEnd(o));
-      return `<label class="pickp"><input type="checkbox" value="${p.id}" ${sel.has(p.id) ? "checked" : ""}><span class="nm">${esc(p.name)}</span><span class="rl ${clash ? "clash" : ""}">${clash ? `Also on ${esc(jobName(clash))}` : roleLabel(p.role)}</span></label>`;
-    }).join("") : `<p class="hint">Add people to the board first, then book them here.</p>`;
+      return `<label class="pickp"><input type="checkbox" value="${p.id}" ${sel.has(p.id) ? "checked" : ""}><span class="nm">${esc(p.name)}</span><span class="rl ${clash ? "clash" : ""}">${clash ? `Già su ${esc(jobName(clash))}` : roleLabel(p.role)}</span></label>`;
+    }).join("") : `<p class="hint">Prima aggiungi le persone al team, poi prenotale qui.</p>`;
   }
-  function billingLabel() { $("#jf-amount-lbl").textContent = $("#jf-billing").value === "hourly" ? "Client rate per hour" : "Fee to client"; }
+  function billingLabel() { $("#jf-amount-lbl").textContent = $("#jf-billing").value === "hourly" ? "Tariffa oraria al cliente" : "Compenso dal cliente"; }
   $("#jf-billing").addEventListener("change", billingLabel);
   $("#jf-date").addEventListener("change", () => pickPeople(pickedPeople()));
   $("#jf-end").addEventListener("change", () => pickPeople(pickedPeople()));
@@ -1919,10 +1922,10 @@ ${docCss()}
     const err = $("#jf-err");
     const client = $("#jf-client").value.trim(), title = $("#jf-name").value.trim(), date = $("#jf-date").value, end = $("#jf-end").value;
     const raw = $("#jf-amount").value.trim(), amt = raw === "" ? 0 : parseFloat(raw);
-    if (!client && !title) return showErr(err, "Enter the client or the job name.");
-    if (!date) return showErr(err, "Pick the date of the job.");
-    if (end && end < date) return showErr(err, "The end date is before the start date.");
-    if (!(amt >= 0)) return showErr(err, "Enter what the client pays, or leave it empty.");
+    if (!client && !title) return showErr(err, "Inserisci il cliente o il nome del lavoro.");
+    if (!date) return showErr(err, "Scegli la data del lavoro.");
+    if (end && end < date) return showErr(err, "La data di fine è precedente alla data di inizio.");
+    if (!(amt >= 0)) return showErr(err, "Inserisci quanto paga il cliente, oppure lascia vuoto.");
     attempt(e.currentTarget, err, async () => {
       const prev = state.jobs.find((x) => x.id === editingJob);
       const billing = $("#jf-billing").value === "hourly" ? "hourly" : "flat";
@@ -1933,15 +1936,15 @@ ${docCss()}
         invoiceStatus: $("#jf-inv").value,
       });
       $("#d-jobform").close();
-      toast(prev ? "Job saved" : `${jobName(rec)} booked${sync.online ? "" : " · saved on this device"}`);
+      toast(prev ? "Lavoro salvato" : `${jobName(rec)} prenotato${sync.online ? "" : " · salvato su questo dispositivo"}`);
     });
   });
   $("#jf-del").addEventListener("click", (e) => {
     const j = state.jobs.find((x) => x.id === editingJob); if (!j) return;
-    armed(e.currentTarget, "Tap again to delete", async () => {
+    armed(e.currentTarget, "Tocca di nuovo per eliminare", async () => {
       await remove("jobs", j);
       $("#d-jobform").close(); if ($("#d-job").open) $("#d-job").close();
-      toast("Job deleted. Hours and receipts logged on it are kept.");
+      toast("Lavoro eliminato. Ore e ricevute registrate su di esso restano.");
     });
   });
 
@@ -1951,7 +1954,7 @@ ${docCss()}
     const rank = (j) => (jobOn(j, today) ? 0 : j.date > today ? 1 : 2);
     const list = state.jobs.filter((j) => j.id === selected || (jobEnd(j) >= from && j.date <= to))
       .sort((a, b) => rank(a) - rank(b) || (rank(a) === 2 ? byStart(b, a) : byStart(a, b)));
-    sel.innerHTML = `<option value="">No booking</option>` + list.map((j) => `<option value="${j.id}">${esc(`${fmtShort(j.date)} · ${jobLabel(j)}`)}</option>`).join("");
+    sel.innerHTML = `<option value="">Nessun lavoro</option>` + list.map((j) => `<option value="${j.id}">${esc(`${fmtShort(j.date)} · ${jobLabel(j)}`)}</option>`).join("");
     sel.value = list.some((j) => j.id === selected) ? selected : "";
     sel.closest(".field").hidden = !state.jobs.length;
   }
@@ -1976,21 +1979,21 @@ ${docCss()}
   $("#rf-person").addEventListener("change", (e) => { if (!$("#rf-job").value) jobOptions($("#rf-job"), bookedOn(e.target.value, $("#rf-date").value || isoDay())?.id || ""); });
   function receiptJobRow(r) {
     const j = r.jobId && state.jobs.find((x) => x.id === r.jobId);
-    return j ? `<dt>Job</dt><dd><button class="btn quiet sm" type="button" data-act="job-open" data-id="${j.id}">${esc(jobLabel(j))}</button></dd>` : "";
+    return j ? `<dt>Lavoro</dt><dd><button class="btn quiet sm" type="button" data-act="job-open" data-id="${j.id}">${esc(jobLabel(j))}</button></dd>` : "";
   }
 
   // CSV: what's on the Jobs view (search applied). Billing columns for admins only.
   function exportJobs() {
     const a = isAdmin();
-    const head = ["Date", "Until", "Client", "Job", "Location", "Call", "Booked", "Hours logged"];
-    if (a) head.push("Client pays", "Fee", "Client rate", "Billed", "Wages", "Receipts", "Cost", "Margin", "Invoice");
+    const head = ["Data", "Fino a", "Cliente", "Lavoro", "Posizione", "Convocazione", "Prenotati", "Ore registrate"];
+    if (a) head.push("Il cliente paga", "Compenso", "Tariffa cliente", "Fatturato", "Compensi", "Ricevute", "Costo", "Margine", "Fattura");
     const rows = jobsMatching().sort((x, y) => byStart(y, x)).map((j) => {
       const mm = jobMoney(j);
       const r = [j.date, jobEnd(j) > j.date ? jobEnd(j) : "", j.client, j.title, j.location, j.call, crewOf(j).map(personName).join("; "), round2(mm.hours)];
-      if (a) r.push(j.billing === "hourly" ? "Per hour" : "Flat fee", j.billing === "hourly" ? "" : round2(j.fee), j.billing === "hourly" ? round2(j.clientRate) : "", mm.billed, mm.wages, mm.exp, mm.cost, mm.margin, INV[invOf(j)]);
+      if (a) r.push(j.billing === "hourly" ? "A ore" : "Compenso fisso", j.billing === "hourly" ? "" : round2(j.fee), j.billing === "hourly" ? round2(j.clientRate) : "", mm.billed, mm.wages, mm.exp, mm.cost, mm.margin, INV[invOf(j)]);
       return r;
     });
-    download(`jobs-${isoDay()}.csv`, [head, ...rows]);
+    download(`lavori-${isoDay()}.csv`, [head, ...rows]);
   }
 
   document.addEventListener("click", (e) => {
@@ -2005,7 +2008,7 @@ ${docCss()}
       case "job-inv": {
         const j = state.jobs.find((x) => x.id === id);
         if (!j || !isAdmin() || invOf(j) === t.dataset.v) return;
-        return save("jobs", { ...j, invoiceStatus: t.dataset.v }).then(() => toast(`Marked ${INV[t.dataset.v].toLowerCase()}`));
+        return save("jobs", { ...j, invoiceStatus: t.dataset.v }).then(() => toast(`Segnato come ${INV[t.dataset.v].toLowerCase()}`));
       }
     }
   });
@@ -2042,7 +2045,7 @@ ${docCss()}
     me = user; await meta.set("me", user);
     sync.authLost = false;
     $("#auth").hidden = true; $("#app").hidden = false;
-    $("#me-chip").innerHTML = `<div><b>${esc(user.name)}</b>${user.role === "admin" ? "Admin" : "Staff"}</div>`;
+    $("#me-chip").innerHTML = `<div><b>${esc(user.name)}</b>${user.role === "admin" ? "Amministratore" : "Staff"}</div>`;
     navigator.storage?.persist?.().catch(() => {});
     loadAccounts();
     route();
@@ -2057,7 +2060,7 @@ ${docCss()}
       $("#li-pass").value = "";
       await enter(r.user);
     } catch (x) {
-      showErr(err, x.status ? x.msg : "No connection. You need to be online to sign in.");
+      showErr(err, x.status ? x.msg : "Nessuna connessione. Devi essere online per accedere.");
     } finally { btn.disabled = false; }
   });
   $("#setup-form").addEventListener("submit", async (e) => {
@@ -2067,7 +2070,7 @@ ${docCss()}
     try {
       const r = await api("/api/setup", { body: { code: $("#su-code").value.trim(), name: $("#su-name").value.trim(), username: $("#su-user").value.trim(), password: $("#su-pass").value } });
       await enter(r.user);
-    } catch (x) { showErr(err, x.status ? x.msg : "No connection. You need to be online to set up."); }
+    } catch (x) { showErr(err, x.status ? x.msg : "Nessuna connessione. Devi essere online per la configurazione."); }
     finally { btn.disabled = false; }
   });
   async function logout(btn, unsent) {
@@ -2076,7 +2079,7 @@ ${docCss()}
       await idb.wipe(); await loadState(); me = null;
       showAuth("login");
     };
-    if (unsent) armed(btn, `Sign out and lose ${unsent} unsent change${unsent === 1 ? "" : "s"}?`, go);
+    if (unsent) armed(btn, (unsent === 1 ? "Uscire e perdere 1 modifica non inviata?" : `Uscire e perdere ${unsent} modifiche non inviate?`), go);
     else go();
   }
 
@@ -2098,13 +2101,13 @@ ${docCss()}
     const host = (u) => (u ? u.replace(/^https?:\/\//, "") : "");
     const other = $("#li-other");
     if (site.site === "admin") {
-      $("#auth-site").textContent = "Office";
-      $("#li-title").textContent = "Office sign in";
-      $("#li-sub").textContent = "For agency admins: people, rates, jobs and payments.";
-      if (site.clientUrl) { other.hidden = false; other.innerHTML = `Model or technician? Sign in at <a href="${esc(site.clientUrl)}">${esc(host(site.clientUrl))}</a>`; }
+      $("#auth-site").textContent = "Ufficio";
+      $("#li-title").textContent = "Accesso ufficio";
+      $("#li-sub").textContent = "Per gli amministratori dell'agenzia: persone, tariffe, lavori e pagamenti.";
+      if (site.clientUrl) { other.hidden = false; other.innerHTML = `Modello/a o tecnico? Accedi su <a href="${esc(site.clientUrl)}">${esc(host(site.clientUrl))}</a>`; }
     } else if (site.site === "client") {
       $("#auth-site").textContent = "Team";
-      if (site.adminUrl) { other.hidden = false; other.innerHTML = `Agency admin? Use <a href="${esc(site.adminUrl)}">${esc(host(site.adminUrl))}</a>`; }
+      if (site.adminUrl) { other.hidden = false; other.innerHTML = `Amministratore dell'agenzia? Usa <a href="${esc(site.adminUrl)}">${esc(host(site.adminUrl))}</a>`; }
     }
     $("#su-code-wrap").hidden = !site.setupCode;
   }
@@ -2130,10 +2133,10 @@ ${docCss()}
     } catch {
       // Offline (or server unreachable): open with what's on this device.
       if (cached) { sync.online = false; me = cached; $("#auth").hidden = true; $("#app").hidden = false;
-        $("#me-chip").innerHTML = `<div><b>${esc(cached.name)}</b>${cached.role === "admin" ? "Admin" : "Staff"}</div>`;
+        $("#me-chip").innerHTML = `<div><b>${esc(cached.name)}</b>${cached.role === "admin" ? "Amministratore" : "Staff"}</div>`;
         route(); return; }
       showAuth("login");
-      showErr($("#li-err"), "No connection. Sign in once while online, then the app works offline.");
+      showErr($("#li-err"), "Nessuna connessione. Accedi una volta mentre sei online, poi l'app funziona anche offline.");
     }
   }
   boot();

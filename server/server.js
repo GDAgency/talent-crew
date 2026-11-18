@@ -43,8 +43,8 @@ const roleAllowed = (site, role) => site === "any" || (site === "admin" && role 
 const siteUrl = (hosts) => (hosts[0] ? `https://${hosts[0]}` : null);
 function wrongSiteMessage(site) {
   return site === "admin"
-    ? `This is the office site, for admins. Team members sign in at ${CLIENT_HOSTS[0] || "the team site"}.`
-    : `Admins sign in on the office site: ${ADMIN_HOSTS[0] || "the admin site"}.`;
+    ? `Questo è il sito dell'ufficio, per gli amministratori. Il team accede da ${CLIENT_HOSTS[0] || "il sito del team"}.`
+    : `Gli amministratori accedono dal sito dell'ufficio: ${ADMIN_HOSTS[0] || "il sito dell'ufficio"}.`;
 }
 
 fs.mkdirSync(PHOTO_DIR, { recursive: true });
@@ -418,13 +418,13 @@ const photoPath = (id) => path.join(PHOTO_DIR, id);
 
 async function putPhoto(req, res, user, id) {
   const type = String(req.headers["content-type"] || "").split(";")[0].trim();
-  if (!PHOTO_TYPES.has(type)) return fail(res, 415, "Use a JPEG, PNG, WebP or PDF file.");
+  if (!PHOTO_TYPES.has(type)) return fail(res, 415, "Usa un file JPEG, PNG, WebP o PDF.");
   const rec = q.getRec.get("receipts", id);
-  if (!rec || rec.deleted) return fail(res, 404, "Receipt not found.");
+  if (!rec || rec.deleted) return fail(res, 404, "Ricevuta non trovata.");
   const data = JSON.parse(rec.data);
-  if (user.role !== "admin" && data.by !== user.id) return fail(res, 403, "Not your receipt.");
+  if (user.role !== "admin" && data.by !== user.id) return fail(res, 403, "Questa ricevuta non è tua.");
   const buf = await readBody(req, MAX_PHOTO_BYTES);
-  if (!buf.length) return fail(res, 400, "Empty file.");
+  if (!buf.length) return fail(res, 400, "Il file è vuoto.");
   const tmp = photoPath(id) + ".tmp";
   await fs.promises.writeFile(tmp, buf);
   await fs.promises.rename(tmp, photoPath(id));
@@ -444,11 +444,11 @@ async function putPhoto(req, res, user, id) {
 
 function getPhoto(req, res, id) {
   const rec = q.getRec.get("receipts", id);
-  if (!rec || rec.deleted) return fail(res, 404, "Not found.");
+  if (!rec || rec.deleted) return fail(res, 404, "Non trovato.");
   const data = JSON.parse(rec.data);
   const file = photoPath(id);
   fs.stat(file, (err, st) => {
-    if (err) return fail(res, 404, "Not found.");
+    if (err) return fail(res, 404, "Non trovato.");
     res.writeHead(200, {
       "Content-Type": PHOTO_TYPES.has(data.photoType) ? data.photoType : "application/octet-stream",
       "Content-Length": st.size,
@@ -469,9 +469,9 @@ function serveStatic(req, res, urlPath) {
   let rel = decodeURIComponent(urlPath);
   if (rel === "/" || !path.extname(rel)) rel = "/index.html";
   const file = path.join(PUBLIC_DIR, path.normalize(rel));
-  if (!file.startsWith(PUBLIC_DIR + path.sep)) return fail(res, 404, "Not found");
+  if (!file.startsWith(PUBLIC_DIR + path.sep)) return fail(res, 404, "Non trovato");
   fs.stat(file, (err, st) => {
-    if (err || !st.isFile()) return fail(res, 404, "Not found");
+    if (err || !st.isFile()) return fail(res, 404, "Non trovato");
     const ext = path.extname(file);
     // Shell files revalidate every time; the service worker keeps the offline copy.
     const cache = ext === ".png" || ext === ".svg" ? "public, max-age=86400" : "no-cache";
@@ -484,9 +484,9 @@ function serveStatic(req, res, urlPath) {
 // Each site installs as its own app, with its own name.
 function serveManifest(req, res, site) {
   fs.readFile(path.join(PUBLIC_DIR, "manifest.webmanifest"), "utf8", (err, text) => {
-    if (err) return fail(res, 404, "Not found");
+    if (err) return fail(res, 404, "Non trovato");
     const m = JSON.parse(text);
-    if (site === "admin") { m.name = `${m.name} · Office`; m.short_name = "T&C Office"; }
+    if (site === "admin") { m.name = `${m.name} · Ufficio`; m.short_name = "T&C Ufficio"; }
     send(res, 200, Buffer.from(JSON.stringify(m)), { "Content-Type": "application/manifest+json", "Cache-Control": "no-cache" });
   });
 }
@@ -508,7 +508,7 @@ async function route(req, res) {
   const site = siteOf(req);
 
   if (p === "/api/health") return send(res, 200, { ok: true });
-  if (site === "unknown") return fail(res, 404, "Unknown site.");
+  if (site === "unknown") return fail(res, 404, "Sito sconosciuto.");
   // Behind Cloudflare: send plain-http visitors to https, and tell browsers to stay on https.
   if (SPLIT_SITES) {
     const proto = String(req.headers["x-forwarded-proto"] || "").toLowerCase();
@@ -520,14 +520,14 @@ async function route(req, res) {
   }
 
   if (!p.startsWith("/api/")) {
-    if (req.method !== "GET" && req.method !== "HEAD") return fail(res, 405, "Method not allowed");
+    if (req.method !== "GET" && req.method !== "HEAD") return fail(res, 405, "Metodo non consentito");
     if (p === "/manifest.webmanifest") return serveManifest(req, res, site);
     return serveStatic(req, res, p);
   }
 
   // Every state-changing API call must carry this header. Browsers never add
   // it to cross-site form posts, so it blocks CSRF together with SameSite.
-  if (req.method !== "GET" && req.headers["x-tc"] !== "1") return fail(res, 403, "Missing request header.");
+  if (req.method !== "GET" && req.headers["x-tc"] !== "1") return fail(res, 403, "Intestazione della richiesta mancante.");
 
   if (p === "/api/site" && req.method === "GET") {
     return send(res, 200, { site, adminUrl: siteUrl(ADMIN_HOSTS), clientUrl: siteUrl(CLIENT_HOSTS), setupCode: !!SETUP_CODE });
@@ -535,26 +535,26 @@ async function route(req, res) {
 
   if (p === "/api/me" && req.method === "GET") {
     if (q.userCount.get().n === 0) {
-      if (site === "client") return fail(res, 401, "This site isn't set up yet.");
+      if (site === "client") return fail(res, 401, "Questo sito non è ancora stato configurato.");
       return send(res, 200, { needsSetup: true });
     }
     const u = currentUser(req);
-    return u ? send(res, 200, { user: publicUser(u) }) : fail(res, 401, "Not signed in.");
+    return u ? send(res, 200, { user: publicUser(u) }) : fail(res, 401, "Accesso non effettuato.");
   }
 
   if (p === "/api/setup" && req.method === "POST") {
-    if (q.userCount.get().n !== 0) return fail(res, 409, "Setup is already done.");
+    if (q.userCount.get().n !== 0) return fail(res, 409, "La configurazione è già stata completata.");
     if (site === "client") return fail(res, 403, wrongSiteMessage("client"));
-    if (throttled(ip)) return fail(res, 429, "Too many attempts. Wait 15 minutes and try again.");
+    if (throttled(ip)) return fail(res, 429, "Troppi tentativi. Aspetta 15 minuti e riprova.");
     const b = await readJson(req);
     if (SETUP_CODE) {
       const given = Buffer.from(str(b.code, 200).trim()), want = Buffer.from(SETUP_CODE);
-      if (given.length !== want.length || !crypto.timingSafeEqual(given, want)) { noteFail(ip); return fail(res, 403, "That setup code is wrong."); }
+      if (given.length !== want.length || !crypto.timingSafeEqual(given, want)) { noteFail(ip); return fail(res, 403, "Il codice di attivazione non è corretto."); }
     }
     const username = str(b.username, 40).trim(), name = str(b.name, 80).trim();
-    if (!validUsername(username)) return fail(res, 400, "Username: 3–40 letters, numbers or . _ @ -");
-    if (!name) return fail(res, 400, "Enter your name.");
-    if (!validPassword(b.password)) return fail(res, 400, "Password must be at least 8 characters.");
+    if (!validUsername(username)) return fail(res, 400, "Nome utente: 3–40 tra lettere, numeri o . _ @ -");
+    if (!name) return fail(res, 400, "Inserisci il tuo nome.");
+    if (!validPassword(b.password)) return fail(res, 400, "La password deve avere almeno 8 caratteri.");
     const user = { id: crypto.randomUUID(), username, name, role: "admin" };
     q.insertUser.run(user.id, username, name, hashPassword(b.password), "admin", Date.now());
     startSession(req, res, user);
@@ -562,12 +562,12 @@ async function route(req, res) {
   }
 
   if (p === "/api/login" && req.method === "POST") {
-    if (throttled(ip)) return fail(res, 429, "Too many attempts. Wait 15 minutes and try again.");
+    if (throttled(ip)) return fail(res, 429, "Troppi tentativi. Aspetta 15 minuti e riprova.");
     const b = await readJson(req, 10_000);
     const u = q.userByName.get(str(b.username, 40).trim());
     if (!u || u.disabled || !checkPassword(str(b.password, 200), u.pw_hash)) {
       noteFail(ip);
-      return fail(res, 401, "Wrong username or password.");
+      return fail(res, 401, "Nome utente o password errati.");
     }
     loginFails.delete(ip);
     if (!roleAllowed(site, u.role)) return fail(res, 403, wrongSiteMessage(site));
@@ -584,7 +584,7 @@ async function route(req, res) {
 
   // Everything below needs a signed-in user.
   const user = currentUser(req);
-  if (!user) return fail(res, 401, "Not signed in.");
+  if (!user) return fail(res, 401, "Accesso non effettuato.");
 
   if (p === "/api/sync" && req.method === "POST") {
     const body = await readJson(req, 8 * 1024 * 1024);
@@ -595,21 +595,21 @@ async function route(req, res) {
   if (photo) {
     if (req.method === "PUT") return putPhoto(req, res, user, photo[1]);
     if (req.method === "GET") return getPhoto(req, res, photo[1]);
-    return fail(res, 405, "Method not allowed");
+    return fail(res, 405, "Metodo non consentito");
   }
 
   if (p === "/api/password" && req.method === "POST") {
     const b = await readJson(req, 10_000);
     const full = q.userById.get(user.id);
-    if (!checkPassword(str(b.current, 200), full.pw_hash)) return fail(res, 400, "Your current password is wrong.");
-    if (!validPassword(b.password)) return fail(res, 400, "New password must be at least 8 characters.");
+    if (!checkPassword(str(b.current, 200), full.pw_hash)) return fail(res, 400, "La password attuale non è corretta.");
+    if (!validPassword(b.password)) return fail(res, 400, "La nuova password deve avere almeno 8 caratteri.");
     db.prepare("UPDATE users SET pw_hash = ? WHERE id = ?").run(hashPassword(b.password), user.id);
     return send(res, 200, { ok: true });
   }
 
   // Change history (admin only), newest first, paged by id.
   if (p === "/api/audit" && req.method === "GET") {
-    if (user.role !== "admin") return fail(res, 403, "Only admins can see the activity log.");
+    if (user.role !== "admin") return fail(res, 403, "Solo gli amministratori possono vedere il registro attività.");
     const before = Math.floor(Number(url.searchParams.get("before"))) || Number.MAX_SAFE_INTEGER;
     const limit = Math.min(100, Math.max(1, Math.floor(Number(url.searchParams.get("limit"))) || 50));
     const person = str(url.searchParams.get("person"), 64), by = str(url.searchParams.get("user"), 64);
@@ -623,16 +623,16 @@ async function route(req, res) {
 
   // Account management (admin only).
   if (p.startsWith("/api/users")) {
-    if (user.role !== "admin") return fail(res, 403, "Only admins manage accounts.");
+    if (user.role !== "admin") return fail(res, 403, "Solo gli amministratori gestiscono gli account.");
     if (p === "/api/users" && req.method === "GET") return send(res, 200, { users: q.users.all() });
     if (p === "/api/users" && req.method === "POST") {
       const b = await readJson(req, 10_000);
       const username = str(b.username, 40).trim(), name = str(b.name, 80).trim();
       const role = b.role === "admin" ? "admin" : "staff";
-      if (!validUsername(username)) return fail(res, 400, "Username: 3–40 letters, numbers or . _ @ -");
-      if (!name) return fail(res, 400, "Enter the person's name.");
-      if (!validPassword(b.password)) return fail(res, 400, "Password must be at least 8 characters.");
-      if (q.userByName.get(username)) return fail(res, 409, "That username is taken.");
+      if (!validUsername(username)) return fail(res, 400, "Nome utente: 3–40 tra lettere, numeri o . _ @ -");
+      if (!name) return fail(res, 400, "Inserisci il nome della persona.");
+      if (!validPassword(b.password)) return fail(res, 400, "La password deve avere almeno 8 caratteri.");
+      if (q.userByName.get(username)) return fail(res, 409, "Questo nome utente è già in uso.");
       const id = crypto.randomUUID();
       q.insertUser.run(id, username, name, hashPassword(b.password), role, Date.now());
       writeAudit(user, "account.add", { info: { target: name, role } });
@@ -641,22 +641,22 @@ async function route(req, res) {
     const m = p.match(/^\/api\/users\/([A-Za-z0-9-]{1,64})$/);
     if (m && req.method === "POST") {
       const target = q.userById.get(m[1]);
-      if (!target) return fail(res, 404, "Account not found.");
+      if (!target) return fail(res, 404, "Account non trovato.");
       const b = await readJson(req, 10_000);
-      if (target.id === user.id && (b.disabled || (b.role && b.role !== "admin"))) return fail(res, 400, "You can't disable or demote your own account.");
+      if (target.id === user.id && (b.disabled || (b.role && b.role !== "admin"))) return fail(res, 400, "Non puoi disattivare o declassare il tuo account.");
       let personId;
       if (b.personId !== undefined) {
         personId = b.personId ? String(b.personId) : null;
         if (personId) {
           const rec = ID_RE.test(personId) && q.getRec.get("people", personId);
-          if (!rec || rec.deleted) return fail(res, 400, "That person isn't on the board.");
+          if (!rec || rec.deleted) return fail(res, 400, "Questa persona non è in elenco.");
           const other = db.prepare("SELECT name FROM users WHERE person_id = ? AND id != ?").get(personId, target.id);
           if (other) return fail(res, 409, `${JSON.parse(rec.data).name} is already linked to ${other.name}'s login.`);
         }
       }
       const tgt = { target: target.name };
       if (b.password !== undefined) {
-        if (!validPassword(b.password)) return fail(res, 400, "Password must be at least 8 characters.");
+        if (!validPassword(b.password)) return fail(res, 400, "La password deve avere almeno 8 caratteri.");
         db.prepare("UPDATE users SET pw_hash = ? WHERE id = ?").run(hashPassword(b.password), target.id);
         if (target.id !== user.id) q.deleteUserSessions.run(target.id);
         writeAudit(user, "account.password", { info: tgt });
@@ -678,15 +678,15 @@ async function route(req, res) {
     }
   }
 
-  return fail(res, 404, "Not found.");
+  return fail(res, 404, "Non trovato.");
 }
 
 const server = http.createServer((req, res) => {
   route(req, res).catch((e) => {
     if (res.headersSent) { res.destroy(); return; }
-    if (e.status) return fail(res, e.status, e.status === 413 ? "That file is too large." : "Bad request.");
+    if (e.status) return fail(res, e.status, e.status === 413 ? "Il file è troppo grande." : "Richiesta non valida.");
     console.error(e);
-    fail(res, 500, "Server error.");
+    fail(res, 500, "Errore del server.");
   });
 });
 server.listen(PORT, HOST, () => {

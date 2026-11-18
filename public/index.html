@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="en">
+<html lang="it">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Talent &amp; Crew</title>
-<meta name="description" content="Where your models and technicians are, the hours they've worked, what they're owed and the receipts to reimburse.">
+<meta name="description" content="Dove sono i tuoi modelli e tecnici, le ore lavorate, quanto è dovuto e le ricevute da rimborsare.">
 <meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#17181C" media="(prefers-color-scheme: dark)">
 <link rel="manifest" href="/manifest.webmanifest">
@@ -23,34 +23,34 @@
 <!-- ============ Sign in / first-run setup ============ -->
 <div class="auth" id="auth" hidden>
   <div class="auth-art">
-    <div class="wordmark"><b>Talent <i>&amp;</i> Crew</b><span id="auth-site">Booking-desk ledger</span></div>
-    <h2>Call time.<br>Wrap.<br><em>Paid.</em></h2>
+    <div class="wordmark"><b>Talent <i>&amp;</i> Crew</b><span id="auth-site">Registro dell'agenzia</span></div>
+    <h2>Convocazione.<br>Fine.<br><em>Pagato.</em></h2>
     <div class="callsheet" aria-hidden="true">
-      <div><span>Call</span><b>06:00</b></div>
-      <div><span>Location</span><b>Studio 3, Via Tortona</b></div>
-      <div><span>Wrap</span><b>14:30 · 8.5 h</b></div>
-      <div><span>Receipts</span><b>Taxi · 1 photo</b></div>
+      <div><span>Convocazione</span><b>06:00</b></div>
+      <div><span>Posizione</span><b>Studio 3, Via Tortona</b></div>
+      <div><span>Fine</span><b>14:30 · 8,5 h</b></div>
+      <div><span>Ricevute</span><b>Taxi · 1 foto</b></div>
     </div>
   </div>
   <div class="auth-form">
     <form id="login-form" novalidate>
-      <h1 id="li-title">Sign in</h1>
-      <p id="li-sub">Use the account your agency gave you.</p>
-      <div class="field"><label for="li-user">Username</label><input id="li-user" autocomplete="username" autocapitalize="none" spellcheck="false" required></div>
+      <h1 id="li-title">Accedi</h1>
+      <p id="li-sub">Usa l'account che ti ha dato la tua agenzia.</p>
+      <div class="field"><label for="li-user">Nome utente</label><input id="li-user" autocomplete="username" autocapitalize="none" spellcheck="false" required></div>
       <div class="field"><label for="li-pass">Password</label><input id="li-pass" type="password" autocomplete="current-password" required></div>
       <div class="err" id="li-err" hidden></div>
-      <button class="btn primary block" type="submit" id="li-btn">Sign in</button>
+      <button class="btn primary block" type="submit" id="li-btn">Accedi</button>
       <p class="other-site" id="li-other" hidden></p>
     </form>
     <form id="setup-form" novalidate hidden>
-      <h1>Set up your agency</h1>
-      <p>Create the first admin account. You'll add the rest of the team after.</p>
-      <div class="field" id="su-code-wrap" hidden><label for="su-code">Setup code</label><input id="su-code" autocomplete="one-time-code" autocapitalize="none" spellcheck="false"><span class="hint">The one-time code you were given with this site.</span></div>
-      <div class="field"><label for="su-name">Your name</label><input id="su-name" autocomplete="name" required></div>
-      <div class="field"><label for="su-user">Username</label><input id="su-user" autocomplete="username" autocapitalize="none" spellcheck="false" required></div>
-      <div class="field"><label for="su-pass">Password</label><input id="su-pass" type="password" autocomplete="new-password" minlength="8" required><span class="hint">At least 8 characters.</span></div>
+      <h1>Configura la tua agenzia</h1>
+      <p>Crea il primo account amministratore. Il resto del team lo aggiungerai dopo.</p>
+      <div class="field" id="su-code-wrap" hidden><label for="su-code">Codice di attivazione</label><input id="su-code" autocomplete="one-time-code" autocapitalize="none" spellcheck="false"><span class="hint">Il codice monouso che hai ricevuto insieme a questo sito.</span></div>
+      <div class="field"><label for="su-name">Il tuo nome</label><input id="su-name" autocomplete="name" required></div>
+      <div class="field"><label for="su-user">Nome utente</label><input id="su-user" autocomplete="username" autocapitalize="none" spellcheck="false" required></div>
+      <div class="field"><label for="su-pass">Password</label><input id="su-pass" type="password" autocomplete="new-password" minlength="8" required><span class="hint">Almeno 8 caratteri.</span></div>
       <div class="err" id="su-err" hidden></div>
-      <button class="btn primary block" type="submit" id="su-btn">Create admin account</button>
+      <button class="btn primary block" type="submit" id="su-btn">Crea account amministratore</button>
     </form>
   </div>
 </div>
@@ -59,16 +59,16 @@
 <div class="app" id="app" hidden>
   <aside class="rail">
     <a class="wordmark" href="#team"><b>Talent <i>&amp;</i> Crew</b><span id="today"></span></a>
-    <nav class="nav" aria-label="Sections">
+    <nav class="nav" aria-label="Sezioni">
       <a href="#team" data-tab="team" id="nav-team"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5"/><circle cx="17" cy="9" r="2.4"/><path d="M15.5 14.2c2.6-.4 4.6 1.2 5 4.3"/></svg><span>Team</span></a>
-      <a href="#jobs" data-tab="jobs"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 9.5h17M8 3v4M16 3v4M7.5 13.5h3M7.5 16.5h6"/></svg><span>Jobs</span></a>
-      <a href="#hours" data-tab="hours"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg><span>Hours</span><b class="count" id="nav-hrs" hidden></b></a>
-      <a href="#receipts" data-tab="receipts"><svg viewBox="0 0 24 24"><path d="M6 3.5h12v17l-2-1.4-2 1.4-2-1.4-2 1.4-2-1.4-2 1.4z"/><path d="M9 8.5h6M9 12h6M9 15.5h3.5"/></svg><span>Receipts</span><b class="count" id="nav-rec" hidden></b></a>
-      <a href="#payments" data-tab="payments"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12.5" rx="2"/><path d="M3 10h18M7 15h3"/></svg><span>Payments</span></a>
-      <a href="#settings" data-tab="settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span>Settings</span></a>
+      <a href="#jobs" data-tab="jobs"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 9.5h17M8 3v4M16 3v4M7.5 13.5h3M7.5 16.5h6"/></svg><span>Lavori</span></a>
+      <a href="#hours" data-tab="hours"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg><span>Ore</span><b class="count" id="nav-hrs" hidden></b></a>
+      <a href="#receipts" data-tab="receipts"><svg viewBox="0 0 24 24"><path d="M6 3.5h12v17l-2-1.4-2 1.4-2-1.4-2 1.4-2-1.4-2 1.4z"/><path d="M9 8.5h6M9 12h6M9 15.5h3.5"/></svg><span>Ricevute</span><b class="count" id="nav-rec" hidden></b></a>
+      <a href="#payments" data-tab="payments"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12.5" rx="2"/><path d="M3 10h18M7 15h3"/></svg><span data-short="Paghe">Pagamenti</span></a>
+      <a href="#settings" data-tab="settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span data-short="Opzioni">Impostazioni</span></a>
     </nav>
     <div class="rail-foot">
-      <button class="sync" id="sync" type="button" data-state="ok" title="Sync now"><span class="dot"></span><span id="sync-txt">Up to date</span></button>
+      <button class="sync" id="sync" type="button" data-state="ok" title="Sincronizza ora"><span class="dot"></span><span id="sync-txt">Aggiornato</span></button>
       <div class="me-chip" id="me-chip"></div>
     </div>
   </aside>
@@ -78,39 +78,39 @@
 
     <section data-view="team">
       <div class="view-head">
-        <div><h1>The board</h1><p>Who's where, what they've worked and what they're owed.</p></div>
-        <div class="view-actions"><button class="btn primary admin" type="button" data-act="add-person"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Add person</button></div>
+        <div><h1>Il team</h1><p>Chi è dove, quanto ha lavorato e quanto gli è dovuto.</p></div>
+        <div class="view-actions"><button class="btn primary admin" type="button" data-act="add-person"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Aggiungi persona</button></div>
       </div>
       <div class="summary" id="summary"></div>
       <div id="queue-strip"></div>
       <div class="filters">
-        <div class="seg" role="group" aria-label="Show" id="role-seg">
-          <button type="button" data-role="all" aria-pressed="true">Everyone</button>
-          <button type="button" data-role="model" aria-pressed="false">Models</button>
-          <button type="button" data-role="technician" aria-pressed="false">Technicians</button>
-          <button type="button" data-role="owed" aria-pressed="false">Owed</button>
+        <div class="seg" role="group" aria-label="Mostra" id="role-seg">
+          <button type="button" data-role="all" aria-pressed="true">Tutti</button>
+          <button type="button" data-role="model" aria-pressed="false">Modelli</button>
+          <button type="button" data-role="technician" aria-pressed="false">Tecnici</button>
+          <button type="button" data-role="owed" aria-pressed="false">Da pagare</button>
         </div>
         <span class="grow"></span>
-        <input class="input search" id="q" type="search" placeholder="Search name or location" aria-label="Search people">
+        <input class="input search" id="q" type="search" placeholder="Cerca nome o posizione" aria-label="Cerca persone">
       </div>
       <div id="board"></div>
     </section>
 
     <section data-view="jobs" hidden>
       <div class="view-head">
-        <div><h1>Jobs</h1><p>Bookings: the client, the call time, where, and who's on it.</p></div>
+        <div><h1>Lavori</h1><p>Prenotazioni: il cliente, l'orario di convocazione, il luogo e chi c'è.</p></div>
         <div class="view-actions">
-          <button class="btn" type="button" data-act="job-export"><svg viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>Export</button>
-          <button class="btn primary admin" type="button" data-act="job-add"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>New job</button>
+          <button class="btn" type="button" data-act="job-export"><svg viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>Esporta</button>
+          <button class="btn primary admin" type="button" data-act="job-add"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Nuovo lavoro</button>
         </div>
       </div>
       <div class="filters">
-        <div class="seg admin" role="group" aria-label="Show" id="job-seg">
-          <button type="button" data-jv="list" aria-pressed="true">Bookings</button>
-          <button type="button" data-jv="clients" aria-pressed="false">Clients</button>
+        <div class="seg admin" role="group" aria-label="Mostra" id="job-seg">
+          <button type="button" data-jv="list" aria-pressed="true">Prenotazioni</button>
+          <button type="button" data-jv="clients" aria-pressed="false">Clienti</button>
         </div>
         <span class="grow"></span>
-        <input class="input search" id="job-q" type="search" placeholder="Search client, job or place" aria-label="Search jobs">
+        <input class="input search" id="job-q" type="search" placeholder="Cerca cliente, lavoro o luogo" aria-label="Cerca lavori">
       </div>
       <div id="jobs"></div>
     </section>
@@ -121,16 +121,16 @@
 
     <section data-view="hours" hidden>
       <div class="view-head">
-        <div><h1>Hours</h1><p>Every call and wrap, with the rate it was booked at.</p></div>
+        <div><h1>Ore</h1><p>Ogni convocazione e fine, con la tariffa concordata.</p></div>
         <div class="view-actions">
-          <button class="btn" type="button" data-export="hours"><svg viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>Export</button>
-          <button class="btn primary" type="button" data-act="add-shift"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Log hours</button>
+          <button class="btn" type="button" data-export="hours"><svg viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>Esporta</button>
+          <button class="btn primary" type="button" data-act="add-shift"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Registra ore</button>
         </div>
       </div>
       <div class="filters">
-        <select id="h-person" aria-label="Person"></select>
-        <input type="month" id="h-month" aria-label="Month">
-        <button class="btn quiet sm" type="button" id="h-all">All time</button>
+        <select id="h-person" aria-label="Persona"></select>
+        <input type="month" id="h-month" aria-label="Mese">
+        <button class="btn quiet sm" type="button" id="h-all">Sempre</button>
       </div>
       <div id="queue"></div>
       <div id="hours"></div>
@@ -138,85 +138,85 @@
 
     <section data-view="receipts" hidden>
       <div class="view-head">
-        <div><h1>Receipts</h1><p>Expenses people paid themselves, waiting to be paid back.</p></div>
+        <div><h1>Ricevute</h1><p>Spese pagate di tasca propria, in attesa di rimborso.</p></div>
         <div class="view-actions">
-          <button class="btn" type="button" data-export="receipts"><svg viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>Export</button>
-          <button class="btn primary" type="button" data-act="add-receipt"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Add receipt</button>
+          <button class="btn" type="button" data-export="receipts"><svg viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>Esporta</button>
+          <button class="btn primary" type="button" data-act="add-receipt"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Aggiungi ricevuta</button>
         </div>
       </div>
       <div class="filters">
-        <div class="seg" role="group" aria-label="Show" id="rec-seg">
-          <button type="button" data-rs="pending" aria-pressed="true">To reimburse</button>
-          <button type="button" data-rs="reimbursed" aria-pressed="false">Reimbursed</button>
-          <button type="button" data-rs="all" aria-pressed="false">All</button>
+        <div class="seg" role="group" aria-label="Mostra" id="rec-seg">
+          <button type="button" data-rs="pending" aria-pressed="true">Da rimborsare</button>
+          <button type="button" data-rs="reimbursed" aria-pressed="false">Rimborsate</button>
+          <button type="button" data-rs="all" aria-pressed="false">Tutte</button>
         </div>
-        <select id="r-person" aria-label="Person"></select>
-        <select id="r-cat" aria-label="Category"></select>
+        <select id="r-person" aria-label="Persona"></select>
+        <select id="r-cat" aria-label="Categoria"></select>
       </div>
       <div id="receipts"></div>
     </section>
 
     <section data-view="payments" hidden>
       <div class="view-head">
-        <div><h1>Payments</h1><p>Money that has gone out, and what it covered.</p></div>
+        <div><h1>Pagamenti</h1><p>I soldi usciti e cosa hanno coperto.</p></div>
         <div class="view-actions">
-          <button class="btn" type="button" data-export="payments"><svg viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>Export</button>
-          <button class="btn" type="button" data-act="statement"><svg viewBox="0 0 24 24"><path d="M7 3.5h7l4 4v13H7z"/><path d="M14 3.5v4h4M10 12h5M10 15.5h5"/></svg>Statements</button>
-          <button class="btn primary admin" type="button" data-act="add-payment"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Record payment</button>
+          <button class="btn" type="button" data-export="payments"><svg viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>Esporta</button>
+          <button class="btn" type="button" data-act="statement"><svg viewBox="0 0 24 24"><path d="M7 3.5h7l4 4v13H7z"/><path d="M14 3.5v4h4M10 12h5M10 15.5h5"/></svg>Estratti conto</button>
+          <button class="btn primary admin" type="button" data-act="add-payment"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Registra pagamento</button>
         </div>
       </div>
-      <div class="filters"><select id="p-person" aria-label="Person"></select></div>
+      <div class="filters"><select id="p-person" aria-label="Persona"></select></div>
       <div id="payments"></div>
     </section>
 
     <section data-view="settings" hidden>
-      <div class="view-head"><div><h1>Settings</h1><p>Your account, this device and the team's logins.</p></div></div>
+      <div class="view-head"><div><h1>Impostazioni</h1><p>Il tuo account, questo dispositivo e gli accessi del team.</p></div></div>
       <div class="settings" id="settings"></div>
     </section>
   </main>
 
-  <button class="fab" id="fab" type="button" aria-label="Add"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+  <button class="fab" id="fab" type="button" aria-label="Aggiungi"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
 </div>
 
 <!-- ============ Sheets ============ -->
 <dialog id="d-quick">
-  <div class="sheet-head"><h3>Add</h3><button class="x" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+  <div class="sheet-head"><h3>Aggiungi</h3><button class="x" type="button" data-close aria-label="Chiudi"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
   <div class="sheet-body"><div class="quick" id="quick"></div></div>
 </dialog>
 
 <dialog id="d-person">
   <form class="sheet-form" novalidate>
-    <div class="sheet-head"><h3 id="pf-title">Add person</h3><button class="x" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="sheet-head"><h3 id="pf-title">Aggiungi persona</h3><button class="x" type="button" data-close aria-label="Chiudi"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
     <div class="sheet-body">
-      <div class="field"><label for="pf-name">Full name</label><input id="pf-name" autocomplete="off" required></div>
+      <div class="field"><label for="pf-name">Nome e cognome</label><input id="pf-name" autocomplete="off" required></div>
       <div class="grid2">
-        <div class="field"><label for="pf-role">Role</label><select id="pf-role"><option value="model">Model</option><option value="technician">Technician</option></select></div>
-        <div class="field"><label for="pf-paytype">Paid</label><select id="pf-paytype"><option value="hourly">By the hour</option><option value="day">By the day</option></select></div>
+        <div class="field"><label for="pf-role">Ruolo</label><select id="pf-role"><option value="model">Modello/a</option><option value="technician">Tecnico</option></select></div>
+        <div class="field"><label for="pf-paytype">Pagato</label><select id="pf-paytype"><option value="hourly">A ore</option><option value="day">A giornata</option></select></div>
       </div>
       <fieldset class="terms">
-        <legend>Pay terms</legend>
+        <legend>Condizioni di pagamento</legend>
         <div class="grid2">
-          <div class="field" id="pf-day-wrap" hidden><label for="pf-dayrate">Day rate</label><input id="pf-dayrate" class="money-in" type="number" min="0" step="0.01" inputmode="decimal"></div>
-          <div class="field"><label for="pf-rate">Hourly rate</label><input id="pf-rate" class="money-in" type="number" min="0" step="0.01" inputmode="decimal" required></div>
+          <div class="field" id="pf-day-wrap" hidden><label for="pf-dayrate">Tariffa giornaliera</label><input id="pf-dayrate" class="money-in" type="number" min="0" step="0.01" inputmode="decimal"></div>
+          <div class="field"><label for="pf-rate">Tariffa oraria</label><input id="pf-rate" class="money-in" type="number" min="0" step="0.01" inputmode="decimal" required></div>
         </div>
         <div class="grid2" id="pf-half-wrap" hidden>
-          <div class="field"><label for="pf-halfrate">Half-day rate</label><input id="pf-halfrate" class="money-in" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Optional"></div>
-          <div class="field"><label for="pf-halfunder">For shifts under</label><span class="unit"><input id="pf-halfunder" class="money-in" type="number" min="0" max="24" step="0.25" inputmode="decimal" placeholder="5"><span>h</span></span></div>
+          <div class="field"><label for="pf-halfrate">Tariffa mezza giornata</label><input id="pf-halfrate" class="money-in" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Facoltativa"></div>
+          <div class="field"><label for="pf-halfunder">Per turni sotto le</label><span class="unit"><input id="pf-halfunder" class="money-in" type="number" min="0" max="24" step="0.25" inputmode="decimal" placeholder="5"><span>h</span></span></div>
         </div>
         <div class="grid2">
-          <div class="field"><label for="pf-otafter">Overtime after</label><span class="unit"><input id="pf-otafter" class="money-in" type="number" min="0" max="24" step="0.25" inputmode="decimal" placeholder="None"><span>h</span></span></div>
-          <div class="field"><label for="pf-otmult">Overtime pays</label><span class="unit"><input id="pf-otmult" class="money-in" type="number" min="1" max="5" step="0.05" inputmode="decimal" placeholder="1.5"><span>× rate</span></span></div>
+          <div class="field"><label for="pf-otafter">Straordinario oltre</label><span class="unit"><input id="pf-otafter" class="money-in" type="number" min="0" max="24" step="0.25" inputmode="decimal" placeholder="Nessuno"><span>h</span></span></div>
+          <div class="field"><label for="pf-otmult">Lo straordinario paga</label><span class="unit"><input id="pf-otmult" class="money-in" type="number" min="1" max="5" step="0.05" inputmode="decimal" placeholder="1.5"><span>× tariffa</span></span></div>
         </div>
         <p class="hint" id="pf-terms"></p>
       </fieldset>
-      <div class="field"><label for="pf-spec">Speciality</label><input id="pf-spec" placeholder="Runway, editorial, lighting, hair &amp; make-up…" autocomplete="off"></div>
-      <div class="field"><label for="pf-loc">Current location</label><input id="pf-loc" placeholder="Studio 3, Via Tortona" autocomplete="off"></div>
-      <div class="field"><label for="pf-phone">Phone</label><input id="pf-phone" type="tel" autocomplete="off"></div>
+      <div class="field"><label for="pf-spec">Specialità</label><input id="pf-spec" placeholder="Sfilata, editoriale, luci, trucco e parrucco…" autocomplete="off"></div>
+      <div class="field"><label for="pf-loc">Posizione attuale</label><input id="pf-loc" placeholder="Studio 3, Via Tortona" autocomplete="off"></div>
+      <div class="field"><label for="pf-phone">Telefono</label><input id="pf-phone" type="tel" autocomplete="off"></div>
       <div class="err" id="pf-err" hidden></div>
       <div class="sheet-foot">
-        <button class="btn danger left" type="button" id="pf-del" hidden>Delete</button>
-        <button class="btn" type="button" data-close>Cancel</button>
-        <button class="btn primary" type="submit">Save</button>
+        <button class="btn danger left" type="button" id="pf-del" hidden>Elimina</button>
+        <button class="btn" type="button" data-close>Annulla</button>
+        <button class="btn primary" type="submit">Salva</button>
       </div>
     </div>
   </form>
@@ -224,15 +224,15 @@
 
 <dialog id="d-loc">
   <form class="sheet-form" novalidate>
-    <div class="sheet-head"><h3>Where is <span id="lf-who"></span>?</h3><button class="x" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="sheet-head"><h3>Dov'è <span id="lf-who"></span>?</h3><button class="x" type="button" data-close aria-label="Chiudi"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
     <div class="sheet-body">
-      <div class="field" id="lf-person-wrap"><label for="lf-person">Person</label><select id="lf-person"></select></div>
+      <div class="field" id="lf-person-wrap"><label for="lf-person">Persona</label><select id="lf-person"></select></div>
       <div class="places" id="lf-places"></div>
-      <div class="field"><label for="lf-loc">Location</label><input id="lf-loc" placeholder="On set — Piazza Duomo, Milan" autocomplete="off"><span class="hint">Leave it empty if you don't know.</span></div>
+      <div class="field"><label for="lf-loc">Posizione</label><input id="lf-loc" placeholder="Sul set — Piazza Duomo, Milano" autocomplete="off"><span class="hint">Lascia vuoto se non lo sai.</span></div>
       <div class="err" id="lf-err" hidden></div>
       <div class="sheet-foot">
-        <button class="btn" type="button" data-close>Cancel</button>
-        <button class="btn primary" type="submit">Save location</button>
+        <button class="btn" type="button" data-close>Annulla</button>
+        <button class="btn primary" type="submit">Salva posizione</button>
       </div>
     </div>
   </form>
@@ -240,27 +240,27 @@
 
 <dialog id="d-shift">
   <form class="sheet-form" novalidate>
-    <div class="sheet-head"><h3 id="sf-title">Log hours</h3><button class="x" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="sheet-head"><h3 id="sf-title">Registra ore</h3><button class="x" type="button" data-close aria-label="Chiudi"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
     <div class="sheet-body">
-      <div class="field"><label for="sf-person">Who worked</label><select id="sf-person"></select></div>
+      <div class="field"><label for="sf-person">Chi ha lavorato</label><select id="sf-person"></select></div>
       <div class="grid3">
-        <div class="field"><label for="sf-date">Date</label><input id="sf-date" type="date" required></div>
-        <div class="field"><label for="sf-start">Call</label><input id="sf-start" type="time"></div>
-        <div class="field"><label for="sf-end">Wrap</label><input id="sf-end" type="time"></div>
+        <div class="field"><label for="sf-date">Data</label><input id="sf-date" type="date" required></div>
+        <div class="field"><label for="sf-start">Convocazione</label><input id="sf-start" type="time"></div>
+        <div class="field"><label for="sf-end">Fine</label><input id="sf-end" type="time"></div>
       </div>
       <div class="grid2">
-        <div class="field"><label for="sf-hours">Hours</label><input id="sf-hours" class="money-in" type="number" min="0" step="0.25" inputmode="decimal" required></div>
-        <div class="field"><label for="sf-rate">Rate per hour</label><input id="sf-rate" class="money-in" type="number" min="0" step="0.01" inputmode="decimal" required></div>
+        <div class="field"><label for="sf-hours">Ore</label><input id="sf-hours" class="money-in" type="number" min="0" step="0.25" inputmode="decimal" required></div>
+        <div class="field"><label for="sf-rate">Tariffa oraria</label><input id="sf-rate" class="money-in" type="number" min="0" step="0.01" inputmode="decimal" required></div>
       </div>
-      <div class="field"><label for="sf-jobid">Booking</label><select id="sf-jobid"></select></div>
-      <div class="field"><label for="sf-job">Job or client</label><input id="sf-job" placeholder="Spring lookbook" autocomplete="off"></div>
-      <div class="field"><label for="sf-loc">Location</label><input id="sf-loc" placeholder="Where the job took place" autocomplete="off"></div>
+      <div class="field"><label for="sf-jobid">Prenotazione</label><select id="sf-jobid"></select></div>
+      <div class="field"><label for="sf-job">Lavoro o cliente</label><input id="sf-job" placeholder="Lookbook primavera" autocomplete="off"></div>
+      <div class="field"><label for="sf-loc">Posizione</label><input id="sf-loc" placeholder="Dove si è svolto il lavoro" autocomplete="off"></div>
       <div class="calc" id="sf-calc" hidden></div>
       <div class="err" id="sf-err" hidden></div>
       <div class="sheet-foot">
-        <button class="btn danger left" type="button" id="sf-del" hidden>Delete</button>
-        <button class="btn" type="button" data-close>Cancel</button>
-        <button class="btn primary" type="submit">Save hours</button>
+        <button class="btn danger left" type="button" id="sf-del" hidden>Elimina</button>
+        <button class="btn" type="button" data-close>Annulla</button>
+        <button class="btn primary" type="submit">Salva ore</button>
       </div>
     </div>
   </form>
@@ -268,82 +268,82 @@
 
 <dialog id="d-receipt">
   <form class="sheet-form" novalidate>
-    <div class="sheet-head"><h3>Add receipt</h3><button class="x" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="sheet-head"><h3>Aggiungi ricevuta</h3><button class="x" type="button" data-close aria-label="Chiudi"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
     <div class="sheet-body">
       <div class="capture" id="rf-capture">
-        <button type="button" id="rf-cam"><svg viewBox="0 0 24 24"><path d="M4 8h3l1.6-2.5h6.8L17 8h3v11H4z"/><circle cx="12" cy="13.2" r="3.6"/></svg>Take photo</button>
-        <button type="button" id="rf-pick"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><circle cx="9" cy="9.5" r="1.6"/><path d="M20 15.5l-4.5-4.5L6 20"/></svg>Choose file</button>
+        <button type="button" id="rf-cam"><svg viewBox="0 0 24 24"><path d="M4 8h3l1.6-2.5h6.8L17 8h3v11H4z"/><circle cx="12" cy="13.2" r="3.6"/></svg>Scatta foto</button>
+        <button type="button" id="rf-pick"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><circle cx="9" cy="9.5" r="1.6"/><path d="M20 15.5l-4.5-4.5L6 20"/></svg>Scegli file</button>
       </div>
       <div class="preview" id="rf-preview" hidden></div>
       <input type="file" id="rf-cam-in" accept="image/*" capture="environment" hidden>
       <input type="file" id="rf-file-in" accept="image/*,application/pdf" hidden>
-      <div class="field"><label for="rf-person">Who paid</label><select id="rf-person"></select></div>
+      <div class="field"><label for="rf-person">Chi ha pagato</label><select id="rf-person"></select></div>
       <div class="grid2">
-        <div class="field"><label for="rf-amount">Amount</label><input id="rf-amount" class="money-in" type="number" min="0" step="0.01" inputmode="decimal" required></div>
-        <div class="field"><label for="rf-date">Date</label><input id="rf-date" type="date" required></div>
+        <div class="field"><label for="rf-amount">Importo</label><input id="rf-amount" class="money-in" type="number" min="0" step="0.01" inputmode="decimal" required></div>
+        <div class="field"><label for="rf-date">Data</label><input id="rf-date" type="date" required></div>
       </div>
-      <div class="field"><label for="rf-desc">What it was for</label><input id="rf-desc" placeholder="Taxi to Malpensa, 06:00 call" autocomplete="off"></div>
-      <div class="field"><label for="rf-cat">Category</label><select id="rf-cat"></select></div>
-      <div class="field"><label for="rf-job">Job</label><select id="rf-job"></select><span class="hint">Linking a job counts the receipt in that job's costs.</span></div>
+      <div class="field"><label for="rf-desc">A cosa serviva</label><input id="rf-desc" placeholder="Taxi per Malpensa, convocazione alle 06:00" autocomplete="off"></div>
+      <div class="field"><label for="rf-cat">Categoria</label><select id="rf-cat"></select></div>
+      <div class="field"><label for="rf-job">Lavoro</label><select id="rf-job"></select><span class="hint">Collegando un lavoro, la ricevuta rientra nei costi di quel lavoro.</span></div>
       <div class="err" id="rf-err" hidden></div>
       <div class="sheet-foot">
-        <button class="btn" type="button" data-close>Cancel</button>
-        <button class="btn primary" type="submit">Save receipt</button>
+        <button class="btn" type="button" data-close>Annulla</button>
+        <button class="btn primary" type="submit">Salva ricevuta</button>
       </div>
     </div>
   </form>
 </dialog>
 
 <dialog id="d-view" class="wide">
-  <div class="sheet-head"><h3 id="vw-title">Receipt</h3><button class="x" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+  <div class="sheet-head"><h3 id="vw-title">Ricevuta</h3><button class="x" type="button" data-close aria-label="Chiudi"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
   <div class="sheet-body viewer" id="vw-body"></div>
 </dialog>
 
 <dialog id="d-pay">
   <form class="sheet-form" novalidate>
-    <div class="sheet-head"><h3>Record payment</h3><button class="x" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="sheet-head"><h3>Registra pagamento</h3><button class="x" type="button" data-close aria-label="Chiudi"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
     <div class="sheet-body">
-      <div class="field"><label for="yf-person">Paid to</label><select id="yf-person"></select></div>
+      <div class="field"><label for="yf-person">Pagato a</label><select id="yf-person"></select></div>
       <div class="calc" id="yf-bal"></div>
       <div class="grid2">
-        <div class="field"><label for="yf-amount">Wages paid</label><input id="yf-amount" class="money-in" type="number" min="0" step="0.01" inputmode="decimal"></div>
-        <div class="field"><label for="yf-date">Date</label><input id="yf-date" type="date" required></div>
+        <div class="field"><label for="yf-amount">Compensi pagati</label><input id="yf-amount" class="money-in" type="number" min="0" step="0.01" inputmode="decimal"></div>
+        <div class="field"><label for="yf-date">Data</label><input id="yf-date" type="date" required></div>
       </div>
-      <div class="field"><label for="yf-method">Method</label><select id="yf-method"><option>Bank transfer</option><option>Cash</option><option>Card</option><option>Other</option></select></div>
+      <div class="field"><label for="yf-method">Metodo</label><select id="yf-method"><option value="Bank transfer">Bonifico</option><option value="Cash">Contanti</option><option value="Card">Carta</option><option value="Other">Altro</option></select></div>
       <label class="check" id="yf-rec-wrap" hidden><input type="checkbox" id="yf-rec" checked><span id="yf-rec-lbl"></span></label>
-      <div class="field"><label for="yf-note">Note</label><input id="yf-note" placeholder="Invoice 2026-114" autocomplete="off"></div>
+      <div class="field"><label for="yf-note">Nota</label><input id="yf-note" placeholder="Fattura 2026-114" autocomplete="off"></div>
       <div class="err" id="yf-err" hidden></div>
       <div class="sheet-foot">
-        <button class="btn" type="button" data-close>Cancel</button>
-        <button class="btn primary" type="submit">Record payment</button>
+        <button class="btn" type="button" data-close>Annulla</button>
+        <button class="btn primary" type="submit">Registra pagamento</button>
       </div>
     </div>
   </form>
 </dialog>
 
 <dialog id="d-detail" class="wide">
-  <div class="sheet-head"><h3 id="dt-title"></h3><button class="x" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+  <div class="sheet-head"><h3 id="dt-title"></h3><button class="x" type="button" data-close aria-label="Chiudi"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
   <div class="sheet-body detail" id="dt-body"></div>
 </dialog>
 
 <dialog id="d-statement" class="wide">
-  <div class="sheet-head"><h3>Statement</h3><button class="x" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+  <div class="sheet-head"><h3>Estratto conto</h3><button class="x" type="button" data-close aria-label="Chiudi"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
   <div class="sheet-body">
     <div class="st-ctl">
-      <div class="field st-who"><label for="st-person">Person</label><select id="st-person"></select></div>
-      <div class="field st-when"><span class="lbl">Period</span>
+      <div class="field st-who"><label for="st-person">Persona</label><select id="st-person"></select></div>
+      <div class="field st-when"><span class="lbl">Periodo</span>
         <div class="st-period">
-          <div class="seg" role="group" aria-label="Period" id="st-mode"><button type="button" data-mode="month" aria-pressed="true">Month</button><button type="button" data-mode="range" aria-pressed="false">Custom</button></div>
-          <input type="month" id="st-month" aria-label="Month">
-          <span class="st-range" id="st-range" hidden><input type="date" id="st-from" aria-label="From"><span>to</span><input type="date" id="st-to" aria-label="To"></span>
+          <div class="seg" role="group" aria-label="Periodo" id="st-mode"><button type="button" data-mode="month" aria-pressed="true">Mese</button><button type="button" data-mode="range" aria-pressed="false">Personalizzato</button></div>
+          <input type="month" id="st-month" aria-label="Mese">
+          <span class="st-range" id="st-range" hidden><input type="date" id="st-from" aria-label="Dal"><span>al</span><input type="date" id="st-to" aria-label="Al"></span>
         </div>
       </div>
     </div>
     <div class="st-acts">
-      <button class="btn sm" type="button" id="st-print"><svg viewBox="0 0 24 24"><path d="M7 9V4h10v5M7 17H4.5v-7h15v7H17"/><path d="M7 14h10v6H7z"/></svg>Print</button>
+      <button class="btn sm" type="button" id="st-print"><svg viewBox="0 0 24 24"><path d="M7 9V4h10v5M7 17H4.5v-7h15v7H17"/><path d="M7 14h10v6H7z"/></svg>Stampa</button>
       <button class="btn sm" type="button" id="st-html"><svg viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>HTML</button>
       <button class="btn sm" type="button" id="st-csv"><svg viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>CSV</button>
-      <button class="btn quiet sm end" type="button" id="st-all" title="One row per person for this period">Everyone · CSV</button>
+      <button class="btn quiet sm end" type="button" id="st-all" title="Una riga per persona per questo periodo">Tutti · CSV</button>
     </div>
     <div class="st-stage" id="st-doc"></div>
   </div>
@@ -351,17 +351,17 @@
 
 <dialog id="d-account">
   <form class="sheet-form" novalidate>
-    <div class="sheet-head"><h3 id="af-title">Add login</h3><button class="x" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="sheet-head"><h3 id="af-title">Aggiungi accesso</h3><button class="x" type="button" data-close aria-label="Chiudi"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
     <div class="sheet-body">
-      <div class="field" id="af-name-wrap"><label for="af-name">Name</label><input id="af-name" autocomplete="off"></div>
-      <div class="field" id="af-user-wrap"><label for="af-user">Username</label><input id="af-user" autocomplete="off" autocapitalize="none" spellcheck="false"></div>
-      <div class="field" id="af-role-wrap"><label for="af-role">Access</label>
-        <select id="af-role"><option value="staff">Staff — logs hours, receipts and locations</option><option value="admin">Admin — also manages people, rates and payments</option></select></div>
-      <div class="field"><label for="af-pass" id="af-pass-lbl">Password</label><input id="af-pass" type="text" autocomplete="new-password" spellcheck="false"><span class="hint">At least 8 characters. Share it with them privately.</span></div>
+      <div class="field" id="af-name-wrap"><label for="af-name">Nome</label><input id="af-name" autocomplete="off"></div>
+      <div class="field" id="af-user-wrap"><label for="af-user">Nome utente</label><input id="af-user" autocomplete="off" autocapitalize="none" spellcheck="false"></div>
+      <div class="field" id="af-role-wrap"><label for="af-role">Accesso</label>
+        <select id="af-role"><option value="staff">Staff — registra ore, ricevute e posizioni</option><option value="admin">Amministratore — gestisce anche persone, tariffe e pagamenti</option></select></div>
+      <div class="field"><label for="af-pass" id="af-pass-lbl">Password</label><input id="af-pass" type="text" autocomplete="new-password" spellcheck="false"><span class="hint">Almeno 8 caratteri. Comunicala in privato.</span></div>
       <div class="err" id="af-err" hidden></div>
       <div class="sheet-foot">
-        <button class="btn" type="button" data-close>Cancel</button>
-        <button class="btn primary" type="submit" id="af-btn">Create login</button>
+        <button class="btn" type="button" data-close>Annulla</button>
+        <button class="btn primary" type="submit" id="af-btn">Crea accesso</button>
       </div>
     </div>
   </form>
@@ -369,14 +369,14 @@
 
 <dialog id="d-password">
   <form class="sheet-form" novalidate>
-    <div class="sheet-head"><h3>Change your password</h3><button class="x" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="sheet-head"><h3>Cambia la tua password</h3><button class="x" type="button" data-close aria-label="Chiudi"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
     <div class="sheet-body">
-      <div class="field"><label for="cp-cur">Current password</label><input id="cp-cur" type="password" autocomplete="current-password"></div>
-      <div class="field"><label for="cp-new">New password</label><input id="cp-new" type="password" autocomplete="new-password"><span class="hint">At least 8 characters.</span></div>
+      <div class="field"><label for="cp-cur">Password attuale</label><input id="cp-cur" type="password" autocomplete="current-password"></div>
+      <div class="field"><label for="cp-new">Nuova password</label><input id="cp-new" type="password" autocomplete="new-password"><span class="hint">Almeno 8 caratteri.</span></div>
       <div class="err" id="cp-err" hidden></div>
       <div class="sheet-foot">
-        <button class="btn" type="button" data-close>Cancel</button>
-        <button class="btn primary" type="submit">Change password</button>
+        <button class="btn" type="button" data-close>Annulla</button>
+        <button class="btn primary" type="submit">Cambia password</button>
       </div>
     </div>
   </form>
@@ -384,36 +384,36 @@
 
 <!-- Jobs: detail and form -->
 <dialog id="d-job" class="wide">
-  <div class="sheet-head"><h3 id="jd-title"></h3><button class="x" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+  <div class="sheet-head"><h3 id="jd-title"></h3><button class="x" type="button" data-close aria-label="Chiudi"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
   <div class="sheet-body detail" id="jd-body"></div>
 </dialog>
 
 <dialog id="d-jobform">
   <form class="sheet-form" novalidate>
-    <div class="sheet-head"><h3 id="jf-title">New job</h3><button class="x" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="sheet-head"><h3 id="jf-title">Nuovo lavoro</h3><button class="x" type="button" data-close aria-label="Chiudi"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
     <div class="sheet-body">
       <div class="grid2">
-        <div class="field"><label for="jf-client">Client</label><input id="jf-client" list="jf-clients" placeholder="Maison Verdi" autocomplete="off"><datalist id="jf-clients"></datalist></div>
-        <div class="field"><label for="jf-name">Job</label><input id="jf-name" placeholder="Spring lookbook" autocomplete="off"></div>
+        <div class="field"><label for="jf-client">Cliente</label><input id="jf-client" list="jf-clients" placeholder="Maison Verdi" autocomplete="off"><datalist id="jf-clients"></datalist></div>
+        <div class="field"><label for="jf-name">Lavoro</label><input id="jf-name" placeholder="Lookbook primavera" autocomplete="off"></div>
       </div>
       <div class="grid3">
-        <div class="field"><label for="jf-date">Date</label><input id="jf-date" type="date" required></div>
-        <div class="field"><label for="jf-end">Until</label><input id="jf-end" type="date"></div>
-        <div class="field"><label for="jf-call">Call</label><input id="jf-call" type="time"></div>
+        <div class="field"><label for="jf-date">Data</label><input id="jf-date" type="date" required></div>
+        <div class="field"><label for="jf-end">Fino a</label><input id="jf-end" type="date"></div>
+        <div class="field"><label for="jf-call">Convocazione</label><input id="jf-call" type="time"></div>
       </div>
-      <div class="field"><label for="jf-loc">Location</label><input id="jf-loc" placeholder="Studio 3, Via Tortona" autocomplete="off"></div>
-      <div class="field"><span class="lbl">Booked</span><div class="pick" id="jf-people"></div></div>
+      <div class="field"><label for="jf-loc">Posizione</label><input id="jf-loc" placeholder="Studio 3, Via Tortona" autocomplete="off"></div>
+      <div class="field"><span class="lbl">Prenotati</span><div class="pick" id="jf-people"></div></div>
       <div class="grid2">
-        <div class="field"><label for="jf-billing">Client pays</label><select id="jf-billing"><option value="flat">A flat fee</option><option value="hourly">Per hour worked</option></select></div>
-        <div class="field"><label for="jf-amount" id="jf-amount-lbl">Fee</label><input id="jf-amount" class="money-in" type="number" min="0" step="0.01" inputmode="decimal"></div>
+        <div class="field"><label for="jf-billing">Il cliente paga</label><select id="jf-billing"><option value="flat">Un compenso fisso</option><option value="hourly">Per ora lavorata</option></select></div>
+        <div class="field"><label for="jf-amount" id="jf-amount-lbl">Compenso</label><input id="jf-amount" class="money-in" type="number" min="0" step="0.01" inputmode="decimal"></div>
       </div>
-      <div class="field"><label for="jf-inv">Invoice</label><select id="jf-inv"><option value="not invoiced">Not invoiced</option><option value="invoiced">Invoiced</option><option value="paid">Paid</option></select></div>
-      <div class="field"><label for="jf-notes">Notes</label><textarea id="jf-notes" rows="3" placeholder="Wardrobe, parking, who to ask for on set"></textarea></div>
+      <div class="field"><label for="jf-inv">Fattura</label><select id="jf-inv"><option value="not invoiced">Non fatturato</option><option value="invoiced">Fatturato</option><option value="paid">Pagato</option></select></div>
+      <div class="field"><label for="jf-notes">Note</label><textarea id="jf-notes" rows="3" placeholder="Guardaroba, parcheggio, a chi chiedere sul set"></textarea></div>
       <div class="err" id="jf-err" hidden></div>
       <div class="sheet-foot">
-        <button class="btn danger left" type="button" id="jf-del" hidden>Delete</button>
-        <button class="btn" type="button" data-close>Cancel</button>
-        <button class="btn primary" type="submit">Save job</button>
+        <button class="btn danger left" type="button" id="jf-del" hidden>Elimina</button>
+        <button class="btn" type="button" data-close>Annulla</button>
+        <button class="btn primary" type="submit">Salva lavoro</button>
       </div>
     </div>
   </form>
@@ -421,14 +421,14 @@
 
 <dialog id="d-reject">
   <form class="sheet-form" novalidate>
-    <div class="sheet-head"><h3 id="rj-title">Reject hours</h3><button class="x" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="sheet-head"><h3 id="rj-title">Rifiuta ore</h3><button class="x" type="button" data-close aria-label="Chiudi"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
     <div class="sheet-body">
       <p class="hint" id="rj-what"></p>
-      <div class="field"><label for="rj-note">Note for them</label><textarea id="rj-note" rows="3" maxlength="300" placeholder="Wrap was 14:00 on the call sheet, not 16:00"></textarea><span class="hint">They see this next to the entry. If they fix it, it comes back here for approval.</span></div>
+      <div class="field"><label for="rj-note">Nota per la persona</label><textarea id="rj-note" rows="3" maxlength="300" placeholder="Sul foglio di convocazione la fine era alle 14:00, non alle 16:00"></textarea><span class="hint">La vedrà accanto alla voce. Se la corregge, torna qui per l'approvazione.</span></div>
       <div class="err" id="rj-err" hidden></div>
       <div class="sheet-foot">
-        <button class="btn" type="button" data-close>Cancel</button>
-        <button class="btn primary" type="submit" id="rj-btn">Reject</button>
+        <button class="btn" type="button" data-close>Annulla</button>
+        <button class="btn primary" type="submit" id="rj-btn">Rifiuta</button>
       </div>
     </div>
   </form>

@@ -88,6 +88,8 @@
   // The person on the board this login belongs to (an admin links it in Settings).
   const myPerson = () => (me?.personId ? state.people.find((p) => p.id === me.personId) || null : null);
   const staffMe = () => !isAdmin() && !!myPerson();
+  // Staff see money (rates, hours, receipts, payments) only for themselves; the server sends nothing else.
+  const seesPay = (personId) => isAdmin() || (!!me?.personId && personId === me.personId);
   // Hours logged by staff wait for an admin; entries from before approvals existed count as approved.
   const approvalOf = (s) => s.approval || "approved";
   const counts = (s) => approvalOf(s) === "approved";
@@ -203,7 +205,11 @@
         }
         ops.push({ s: "meta", val: { k: "rev", v: res.rev } });
         await idb.batch(ops);
-        if (res.me && me && res.me.id === me.id && stable(res.me) !== stable(me)) { me = res.me; await meta.set("me", me); paintMe(); }
+        if (res.me && me && res.me.id === me.id && stable(res.me) !== stable(me)) {
+          // Linked to a different person: what this login may see changed, so fetch everything again.
+          if (res.me.personId !== me.personId && res.me.role !== "admin") { await meta.set("rev", 0); syncAgain = true; }
+          me = res.me; await meta.set("me", me); paintMe();
+        }
         if (res.denied) toast(res.denied === 1 ? "Una modifica non è consentita al tuo account ed è stata annullata." : `${res.denied} modifiche non sono consentite al tuo account e sono state annullate.`);
         if (res.more || after.length > sent.length) syncAgain = true;
         await loadState();
@@ -363,6 +369,7 @@
     const waiting = isAdmin() ? pendingShifts().length : 0;
     const navHrs = $("#nav-hrs"); navHrs.textContent = waiting; navHrs.hidden = !waiting; navHrs.title = `${waiting} in attesa di approvazione`;
     $$(".admin").forEach((el) => (el.hidden = !isAdmin()));
+    $$(".staff-only").forEach((el) => (el.hidden = isAdmin()));
     paintNav();
     fillFilters();
     if (ui.tab === "team") renderTeam(bal, recOpen);
@@ -390,7 +397,8 @@
     for (const p of state.people) if (p.location && p.locationAt && isoDay(new Date(p.locationAt)) === today) onJob++;
     const owedPeople = [...bal.values()].filter((b) => b.owed > 0.004).length;
     const recSum = recOpen.reduce((a, r) => a + (Number(r.amount) || 0), 0);
-    $("#summary").innerHTML = `
+    $("#summary").hidden = !isAdmin();
+    $("#summary").innerHTML = !isAdmin() ? "" : `
       <div><span class="eyebrow">Da pagare al team</span><span class="big ${owed > 0.004 ? "" : "zero"}">${money(owed)}</span><span class="note">${owedPeople ? (owedPeople === 1 ? "1 persona attende il pagamento" : `${owedPeople} persone attendono il pagamento`) : "Tutti in regola"}</span></div>
       <div><span class="eyebrow">Ore</span><span class="mid">${hrs(hMonth)}</span><span class="note">${money(earnedMonth)} a ${new Date().toLocaleDateString(locale, { month: "long" })}</span></div>
       <div><span class="eyebrow">Ricevute</span><span class="mid">${money(recSum)}</span><span class="note">${recOpen.length} da rimborsare</span></div>
@@ -421,7 +429,7 @@
               <button class="comp-name" type="button" data-act="detail" data-id="${p.id}">${esc(p.name)}</button>
               <div class="comp-role"><span class="tag ${p.role === "technician" ? "technician" : "model"}">${roleLabel(p.role)}</span>${p.speciality ? `<span>${esc(p.speciality)}</span>` : ""}${unsyncedTag("people", p.id)}</div>
             </div>
-            ${statusPill(b)}
+            ${seesPay(p.id) ? statusPill(b) : ""}
           </div>
           <div class="where ${live ? "live" : ""}">${ICON.pin}
             <div class="txt">${p.location ? `<div class="loc">${esc(p.location)}</div><div class="ago">Aggiornata ${ago(p.locationAt)}</div>` : `<div class="loc unknown">Posizione sconosciuta</div>`}</div>
@@ -429,11 +437,11 @@
           </div>
           ${bookingLine(p.id)}
         </div>
-        <div class="figs">
+        ${seesPay(p.id) ? `<div class="figs">
           <div><span class="k">Questo mese</span><span class="v ${b.hMonth ? "" : "zero"}">${hrs(b.hMonth)}</span>${b.hPend ? `<span class="pend">+${hrs(b.hPend)} in attesa</span>` : ""}</div>
           <div><span class="k">Ricevute</span><span class="v ${b.rec ? "" : "zero"}">${money(b.rec)}</span></div>
           <div><span class="k">Da pagare</span><span class="v ${b.owed > 0.004 ? "owed" : "zero"}">${money(b.owed)}</span></div>
-        </div>
+        </div>` : ""}
         <div class="comp-acts">
           <button class="btn sm" type="button" data-act="add-shift" data-id="${p.id}">${ICON.clock}Ore</button>
           <button class="btn sm" type="button" data-act="add-receipt" data-id="${p.id}">${ICON.cam}Ricevuta</button>
@@ -617,6 +625,7 @@
       <section class="panel">
         <h2>Estratti conto</h2>
         <div class="field"><label for="agency">Nome dell'agenzia</label><input id="agency" maxlength="80" autocomplete="organization" placeholder="Talent &amp; Crew" value="${esc(state.settings.agencyName || "")}"><span class="hint">Stampato in cima a ogni estratto conto.</span></div>
+        <div class="field"><label for="agency-addr">Indirizzo dell'agenzia</label><input id="agency-addr" maxlength="160" autocomplete="street-address" placeholder="${esc(AGENCY_ADDRESS)}" value="${esc(agencyAddress())}"><span class="hint">Sotto il nome, negli estratti conto.</span></div>
       </section>
       <section class="panel wide">
         <div class="view-head"><div><h2>Accessi del team</h2><p>Lo staff può registrare ore, aggiungere ricevute e aggiornare posizioni. Gli amministratori gestiscono anche persone, tariffe e pagamenti.</p></div>
@@ -635,6 +644,7 @@
     $("#install-btn")?.addEventListener("click", async () => { installEvt.prompt(); await installEvt.userChoice.catch(() => {}); installEvt = null; renderSettings(); });
     $("#currency")?.addEventListener("change", (e) => save("settings", { ...state.settings, id: "main", currency: e.target.value }).then(() => toast("Valuta salvata")));
     if (agencyDraft && $("#agency")) { const a = $("#agency"); a.value = agencyDraft[0]; a.focus(); a.setSelectionRange(agencyDraft[1], agencyDraft[1]); }
+    $("#agency-addr")?.addEventListener("change", (e) => save("settings", { ...state.settings, id: "main", agencyAddress: e.target.value.trim().slice(0, 160) }).then(() => toast("Indirizzo dell'agenzia salvato")));
     $("#agency")?.addEventListener("change", (e) => save("settings", { ...state.settings, id: "main", agencyName: e.target.value.trim().slice(0, 80) }).then(() => toast("Nome dell'agenzia salvato")));
     $("#logout-btn").addEventListener("click", (e) => logout(e.currentTarget, ob + ph));
     if (isAdmin()) { bindSettingsExtras(); paintActivity(); }
@@ -651,6 +661,16 @@
     const shifts = state.shifts.filter((s) => s.personId === id).sort(sortD);
     const pays = state.payments.filter((s) => s.personId === id).sort(sortD);
     const recs = state.receipts.filter((s) => s.personId === id).sort(sortD);
+    if (!seesPay(id)) {
+      $("#dt-body").innerHTML = `
+      <dl class="kv">
+        <dt>Ruolo</dt><dd>${roleLabel(p.role)}${p.speciality ? " · " + esc(p.speciality) : ""}</dd>
+        <dt>Posizione</dt><dd>${p.location ? `${esc(p.location)} <span class="muted">· ${ago(p.locationAt)}</span>` : `<span class="muted">Sconosciuta</span>`}</dd>
+        ${p.phone ? `<dt>Telefono</dt><dd class="mono">${esc(p.phone)}</dd>` : ""}
+      </dl>
+      <p class="muted">Ore, compensi e pagamenti dei colleghi sono visibili solo all'ufficio.</p>`;
+      return;
+    }
     $("#dt-body").innerHTML = `
       <dl class="kv">
         <dt>Ruolo</dt><dd>${roleLabel(p.role)}${p.speciality ? " · " + esc(p.speciality) : ""}</dd>
@@ -1113,6 +1133,8 @@
   // opening balance + work + receipts added − wages paid − receipts paid back = closing balance.
   // Over all time it equals the board's "owed" figure (earned − wages + receipts not yet reimbursed).
   const agencyName = () => String(state.settings.agencyName || "").trim() || "Talent & Crew";
+  const AGENCY_ADDRESS = "Piazza Duomo 20, Milano";
+  const agencyAddress = () => (state.settings.agencyAddress ?? AGENCY_ADDRESS).trim();
   const byDateAsc = (a, b) => (a.date || "").localeCompare(b.date || "") || (a.createdAt || 0) - (b.createdAt || 0);
   function statementData(pid, from, to) {
     const inP = (d) => d >= from && d <= to, before = (d) => d < from;
@@ -1165,7 +1187,7 @@
     const none = (t) => `<p class="stmt-none">${t}</p>`;
     return `<article class="stmt">
       <header class="stmt-top">
-        <div class="stmt-from"><b class="stmt-agency">${ag}</b><span class="stmt-kind">Estratto conto</span></div>
+        <div class="stmt-from"><b class="stmt-agency">${ag}</b>${agencyAddress() ? `<span class="stmt-addr">${esc(agencyAddress())}</span>` : ""}<span class="stmt-kind">Estratto conto</span></div>
         <dl class="stmt-meta"><div><dt>Periodo</dt><dd>${esc(label)}</dd></div><div><dt>Emesso il</dt><dd>${fmtDate(isoDay())}</dd></div></dl>
       </header>
       <div class="stmt-band">
@@ -1232,7 +1254,7 @@ ${docCss()}
   }
   function statementCsv(st, label) {
     const name = st.person.name || "";
-    const rows = [["Estratto conto", agencyName()], ["Intestato a", name], ["Periodo", label, st.from, st.to], ["Condizioni di pagamento", st.person.id ? termsText(payTerms(st.person)) : ""], ["Emesso il", isoDay()], [],
+    const rows = [["Estratto conto", agencyName(), agencyAddress()], ["Intestato a", name], ["Periodo", label, st.from, st.to], ["Condizioni di pagamento", st.person.id ? termsText(payTerms(st.person)) : ""], ["Emesso il", isoDay()], [],
       ["Data", "Voce", "Dettagli", "Ore", "Ore ordinarie", "Ore di straordinario", "Base di calcolo", "Entrate", "Uscite", "Saldo"]];
     let bal = st.opening;
     rows.push([st.from, "Saldo iniziale", "", "", "", "", "", "", "", round2(bal)]);
@@ -1552,7 +1574,7 @@ ${docCss()}
       <p>Studi e location dove il team va spesso. Compaiono come pulsanti rapidi quando qualcuno segnala la propria posizione.</p>
       ${list.length ? `<div class="chips">${list.map((pl) => `<span class="chip static">${ICON.pin}<span>${esc(pl.name)}</span><button type="button" class="chip-x" data-act="place-del" data-id="${pl.id}" aria-label="Rimuovi ${esc(pl.name)}">Rimuovi</button></span>`).join("")}</div>` : ""}
       <form class="inline-add" id="place-form" novalidate>
-        <input class="input" id="place-name" maxlength="120" autocomplete="off" placeholder="Studio 3, Via Tortona" aria-label="Nuovo luogo" value="${esc(ui.placeDraft || "")}">
+        <input class="input" id="place-name" maxlength="120" autocomplete="off" placeholder="Piazza Duomo 20, Milano" aria-label="Nuovo luogo" value="${esc(ui.placeDraft || "")}">
         <button class="btn" type="submit">Aggiungi luogo</button>
       </form>
     </section>`;
@@ -1870,7 +1892,7 @@ ${docCss()}
       <h4 class="eyebrow">Prenotati · ${crew.length}</h4>
       ${crew.length ? `<div class="crew">${crew.map((pid) => {
         const p = state.people.find((x) => x.id === pid), h = hoursBy.get(pid) || 0;
-        return `<div class="crew-row"><div class="who"><button class="comp-name" type="button" data-act="detail" data-id="${pid}">${esc(p.name)}</button><span>${roleLabel(p.role)} · ${h ? hrs(h) + " registrate" : "nessuna ora registrata"}</span></div>
+        return `<div class="crew-row"><div class="who"><button class="comp-name" type="button" data-act="detail" data-id="${pid}">${esc(p.name)}</button><span>${roleLabel(p.role)}${seesPay(pid) ? ` · ${h ? hrs(h) + " registrate" : "nessuna ora registrata"}` : ""}</span></div>
           <button class="btn sm" type="button" data-act="job-log" data-id="${j.id}" data-person="${pid}">${ICON.clock}Registra ore</button></div>`;
       }).join("")}</div>` : `<p class="muted">Ancora nessuno prenotato.${a ? " Modifica il lavoro per prenotare le persone." : ""}</p>`}
       <h4 class="eyebrow">Ore su questo lavoro · ${hrs(mm.hours)}</h4>

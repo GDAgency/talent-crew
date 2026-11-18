@@ -248,11 +248,32 @@ function forceShiftTerms(prev, data) {
 // Jobs (bookings) are admin-only to write: applyChange's staff branch denies any
 // collection it doesn't list. Staff can read jobs, but not the client billing on them.
 const JOB_MONEY_FIELDS = ["billing", "fee", "clientRate", "invoiceStatus"];
+// Staff see only their own money. A login linked to a person on the board gets that
+// person's rates, hours, receipts and payments, plus any hours or receipts the login
+// entered itself. Everyone else on the board comes through as name, role and location,
+// and other people's money records arrive as deletions so they vanish from devices.
+const PERSON_MONEY_FIELDS = PAY_KEYS;
+const ownsPerson = (user, personId) => !!user.person_id && personId === user.person_id;
+function visibleTo(user, c, data) {
+  if (user.role === "admin" || !data) return true;
+  if (c === "payments") return ownsPerson(user, data.personId);
+  if (c === "shifts" || c === "receipts") return ownsPerson(user, data.personId) || data.by === user.id;
+  return true;
+}
 function redactFor(user, c, data) {
-  if (c !== "jobs" || user.role === "admin" || !data) return data;
-  const out = { ...data };
-  for (const k of JOB_MONEY_FIELDS) delete out[k];
-  return out;
+  if (user.role === "admin" || !data) return data;
+  if (!visibleTo(user, c, data)) return { id: data.id, deleted: true, updatedAt: data.updatedAt };
+  if (c === "jobs") {
+    const out = { ...data };
+    for (const k of JOB_MONEY_FIELDS) delete out[k];
+    return out;
+  }
+  if (c === "people" && !ownsPerson(user, data.id)) {
+    const out = { ...data };
+    for (const k of PERSON_MONEY_FIELDS) delete out[k];
+    return out;
+  }
+  return data;
 }
 
 // Applies one client change. Last writer wins by updatedAt. Staff accounts may
@@ -413,6 +434,17 @@ function handleSync(user, body) {
   return { rev, more, denied, records: page.map((r) => ({ c: r.c, id: r.id, data: redactFor(user, r.c, JSON.parse(r.data)) })), fixes, me: publicUser(user) };
 }
 
+// ---------- Agency address ----------
+// The agency's own address is on the saved places list from day one, so check-ins and
+// jobs can pick it with one tap. Inserted once; if an admin removes it, it stays removed.
+(function seedAgencyPlace() {
+  const ADDRESS = process.env.AGENCY_ADDRESS ?? "Piazza Duomo 20, Milano";
+  if (!ADDRESS || q.getRec.get("places", "agency-address")) return;
+  const now = Date.now(), rev = q.bumpRev.get().value;
+  const data = { id: "agency-address", name: ADDRESS, by: null, createdAt: now, updatedAt: now, deleted: false };
+  q.upsertRec.run("places", "agency-address", JSON.stringify(data), now, rev, 0);
+})();
+
 // ---------- Photos ----------
 const photoPath = (id) => path.join(PHOTO_DIR, id);
 
@@ -442,10 +474,11 @@ async function putPhoto(req, res, user, id) {
   send(res, 200, { ok: true });
 }
 
-function getPhoto(req, res, id) {
+function getPhoto(req, res, user, id) {
   const rec = q.getRec.get("receipts", id);
   if (!rec || rec.deleted) return fail(res, 404, "Non trovato.");
   const data = JSON.parse(rec.data);
+  if (!visibleTo(user, "receipts", data)) return fail(res, 404, "Non trovato.");
   const file = photoPath(id);
   fs.stat(file, (err, st) => {
     if (err) return fail(res, 404, "Non trovato.");
@@ -594,7 +627,7 @@ async function route(req, res) {
   const photo = p.match(/^\/api\/photos\/([A-Za-z0-9_-]{1,64})$/);
   if (photo) {
     if (req.method === "PUT") return putPhoto(req, res, user, photo[1]);
-    if (req.method === "GET") return getPhoto(req, res, photo[1]);
+    if (req.method === "GET") return getPhoto(req, res, user, photo[1]);
     return fail(res, 405, "Metodo non consentito");
   }
 

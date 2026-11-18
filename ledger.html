@@ -938,7 +938,7 @@ button.chip:hover { border-color: var(--accent); }
         <p class="hint" id="pf-terms"></p>
       </fieldset>
       <div class="field"><label for="pf-spec">Specialità</label><input id="pf-spec" placeholder="Sfilata, editoriale, luci, trucco e capelli…" autocomplete="off"></div>
-      <div class="field"><label for="pf-loc">Posizione attuale</label><input id="pf-loc" placeholder="Studio 3, Via Tortona" autocomplete="off"></div>
+      <div class="field"><label for="pf-loc">Posizione attuale</label><input id="pf-loc" placeholder="Piazza Duomo 20, Milano" autocomplete="off"></div>
       <div class="field"><label for="pf-phone">Telefono</label><input id="pf-phone" type="tel" autocomplete="off"></div>
       <div class="err" id="pf-err" hidden></div>
       <div class="sheet-foot">
@@ -1074,7 +1074,7 @@ button.chip:hover { border-color: var(--accent); }
         <div class="field"><label for="jf-end">Fino al</label><input id="jf-end" type="date"></div>
         <div class="field"><label for="jf-call">Convocazione</label><input id="jf-call" type="time"></div>
       </div>
-      <div class="field"><label for="jf-loc">Luogo</label><input id="jf-loc" placeholder="Studio 3, Via Tortona" autocomplete="off"></div>
+      <div class="field"><label for="jf-loc">Luogo</label><input id="jf-loc" placeholder="Piazza Duomo 20, Milano" autocomplete="off"></div>
       <div class="field"><span class="lbl">Prenotati</span><div class="pick" id="jf-people"></div></div>
       <div class="grid2">
         <div class="field"><label for="jf-billing">Il cliente paga</label><select id="jf-billing"><option value="flat">Un importo fisso</option><option value="hourly">A ore lavorate</option></select></div>
@@ -2630,7 +2630,7 @@ ${docCss()}
       <h2>Luoghi salvati</h2>
       <p>Studi e location dove il team va spesso. Compaiono come pulsanti rapidi quando qualcuno fa il check-in.</p>
       ${places.length ? `<div class="chips">${places.map((pl) => `<span class="chip static">${ICON.pin}<span>${esc(pl.name)}</span><button type="button" class="chip-x" data-act="place-del" data-id="${pl.id}" aria-label="Rimuovi ${esc(pl.name)}">Rimuovi</button></span>`).join("")}</div>` : ""}
-      <form class="inline-add" id="place-form" novalidate><input class="input" id="place-name" maxlength="120" autocomplete="off" placeholder="Studio 3, Via Tortona" aria-label="Nuovo luogo"><button class="btn" type="submit">Aggiungi luogo</button></form>
+      <form class="inline-add" id="place-form" novalidate><input class="input" id="place-name" maxlength="120" autocomplete="off" placeholder="Piazza Duomo 20, Milano" aria-label="Nuovo luogo"><button class="btn" type="submit">Aggiungi luogo</button></form>
     </section>`;
     return you + placePanel + linkPanel + `<section class="panel wide" id="activity">${activityHTML()}</section>`;
   }

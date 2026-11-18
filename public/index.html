@@ -27,7 +27,7 @@
     <h2>Convocazione.<br>Fine.<br><em>Pagato.</em></h2>
     <div class="callsheet" aria-hidden="true">
       <div><span>Convocazione</span><b>06:00</b></div>
-      <div><span>Posizione</span><b>Studio 3, Via Tortona</b></div>
+      <div><span>Posizione</span><b>Piazza Duomo 20, Milano</b></div>
       <div><span>Fine</span><b>14:30 · 8,5 h</b></div>
       <div><span>Ricevute</span><b>Taxi · 1 foto</b></div>
     </div>
@@ -78,7 +78,7 @@
 
     <section data-view="team">
       <div class="view-head">
-        <div><h1>Il team</h1><p>Chi è dove, quanto ha lavorato e quanto gli è dovuto.</p></div>
+        <div><h1>Il team</h1><p class="admin">Chi è dove, quanto ha lavorato e quanto gli è dovuto.</p><p class="staff-only">Chi è dove oggi. Le tue ore e i tuoi compensi sono nella tua pagina.</p></div>
         <div class="view-actions"><button class="btn primary admin" type="button" data-act="add-person"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Aggiungi persona</button></div>
       </div>
       <div class="summary" id="summary"></div>
@@ -88,7 +88,7 @@
           <button type="button" data-role="all" aria-pressed="true">Tutti</button>
           <button type="button" data-role="model" aria-pressed="false">Modelli</button>
           <button type="button" data-role="technician" aria-pressed="false">Tecnici</button>
-          <button type="button" data-role="owed" aria-pressed="false">Da pagare</button>
+          <button class="admin" type="button" data-role="owed" aria-pressed="false">Da pagare</button>
         </div>
         <span class="grow"></span>
         <input class="input search" id="q" type="search" placeholder="Cerca nome o posizione" aria-label="Cerca persone">
@@ -210,7 +210,7 @@
         <p class="hint" id="pf-terms"></p>
       </fieldset>
       <div class="field"><label for="pf-spec">Specialità</label><input id="pf-spec" placeholder="Sfilata, editoriale, luci, trucco e parrucco…" autocomplete="off"></div>
-      <div class="field"><label for="pf-loc">Posizione attuale</label><input id="pf-loc" placeholder="Studio 3, Via Tortona" autocomplete="off"></div>
+      <div class="field"><label for="pf-loc">Posizione attuale</label><input id="pf-loc" placeholder="Piazza Duomo 20, Milano" autocomplete="off"></div>
       <div class="field"><label for="pf-phone">Telefono</label><input id="pf-phone" type="tel" autocomplete="off"></div>
       <div class="err" id="pf-err" hidden></div>
       <div class="sheet-foot">
@@ -343,7 +343,7 @@
       <button class="btn sm" type="button" id="st-print"><svg viewBox="0 0 24 24"><path d="M7 9V4h10v5M7 17H4.5v-7h15v7H17"/><path d="M7 14h10v6H7z"/></svg>Stampa</button>
       <button class="btn sm" type="button" id="st-html"><svg viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>HTML</button>
       <button class="btn sm" type="button" id="st-csv"><svg viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>CSV</button>
-      <button class="btn quiet sm end" type="button" id="st-all" title="Una riga per persona per questo periodo">Tutti · CSV</button>
+      <button class="btn quiet sm end admin" type="button" id="st-all" title="Una riga per persona per questo periodo">Tutti · CSV</button>
     </div>
     <div class="st-stage" id="st-doc"></div>
   </div>
@@ -401,7 +401,7 @@
         <div class="field"><label for="jf-end">Fino a</label><input id="jf-end" type="date"></div>
         <div class="field"><label for="jf-call">Convocazione</label><input id="jf-call" type="time"></div>
       </div>
-      <div class="field"><label for="jf-loc">Posizione</label><input id="jf-loc" placeholder="Studio 3, Via Tortona" autocomplete="off"></div>
+      <div class="field"><label for="jf-loc">Posizione</label><input id="jf-loc" placeholder="Piazza Duomo 20, Milano" autocomplete="off"></div>
       <div class="field"><span class="lbl">Prenotati</span><div class="pick" id="jf-people"></div></div>
       <div class="grid2">
         <div class="field"><label for="jf-billing">Il cliente paga</label><select id="jf-billing"><option value="flat">Un compenso fisso</option><option value="hourly">Per ora lavorata</option></select></div>

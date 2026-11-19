@@ -573,7 +573,17 @@
       return;
     }
     let total = 0;
-    el.innerHTML = `<div class="tablebox"><table>
+    const jobOf = (p) => (p.jobId && state.jobs.find((j) => j.id === p.jobId)) || null;
+    const cards = rows.map((p) => {
+      const rec = Number(p.receiptsAmount) || 0, t = (Number(p.amount) || 0) + rec, j = jobOf(p);
+      const what = [methodLabel(p.method), p.note || (j ? jobLabel(j) : "")].filter(Boolean).map(esc).join(" · ");
+      return `<div class="list-row">
+        <span class="a">${esc(personName(p.personId))}</span><span class="b">${money(t)}</span>
+        <span class="c">${fmtShort(p.date)} · ${what}${rec ? ` · di cui ricevute ${money(rec)}` : ""}${unsyncedTag("payments", p.id) ? ` ${unsyncedTag("payments", p.id)}` : ""}</span>
+        <span class="d">${isAdmin() ? `<button class="btn quiet sm danger" type="button" data-act="del-payment" data-id="${p.id}">Elimina</button>` : ""}</span>
+      </div>`;
+    }).join("");
+    el.innerHTML = `<div class="list">${cards}<div class="list-total"><span>${rows.length} ${rows.length === 1 ? "pagamento" : "pagamenti"}</span><b>${money(rows.reduce((a, p) => a + (Number(p.amount) || 0) + (Number(p.receiptsAmount) || 0), 0))}</b></div></div><div class="tablebox hours-table"><table>
       <thead><tr><th>Data</th><th>Pagato a</th><th>Metodo · nota</th><th class="n">Compensi</th><th class="n">Ricevute</th><th class="n">Totale</th><th></th></tr></thead>
       <tbody>${rows.map((p) => {
         const rec = Number(p.receiptsAmount) || 0, t = (Number(p.amount) || 0) + rec; total += t;
@@ -1418,7 +1428,7 @@ ${docCss()}
   $("#q").addEventListener("input", (e) => { ui.q = e.target.value; render(); });
   $("#h-person").addEventListener("change", (e) => { ui.hPerson = e.target.value; render(); });
   $("#h-month").addEventListener("change", (e) => { ui.hMonth = e.target.value; render(); });
-  $("#h-all").addEventListener("click", () => { ui.hMonth = ""; render(); });
+
   $("#r-person").addEventListener("change", (e) => { ui.rPerson = e.target.value; render(); });
   $("#p-person").addEventListener("change", (e) => { ui.pPerson = e.target.value; render(); });
 
@@ -2246,6 +2256,12 @@ ${docCss()}
 
   function calTitle() {
     const { start, end } = calRange();
+    if (matchMedia("(max-width: 820px)").matches) {
+      if (cui.view === "month") return parseDay(cui.anchor).toLocaleDateString(locale, { month: "long", year: "numeric" });
+      if (cui.view === "day") return (start === isoDay() ? "Oggi · " : "") + parseDay(start).toLocaleDateString(locale, { weekday: "short", day: "numeric", month: "short" });
+      const x = parseDay(start), y = parseDay(end), same = x.getMonth() === y.getMonth();
+      return `${x.toLocaleDateString(locale, same ? { day: "numeric" } : { day: "numeric", month: "short" })} – ${y.toLocaleDateString(locale, { day: "numeric", month: "short" })}`;
+    }
     if (cui.view === "month") return parseDay(cui.anchor).toLocaleDateString(locale, { month: "long", year: "numeric" });
     if (cui.view === "day") return (start === isoDay() ? "Oggi · " : "") + parseDay(start).toLocaleDateString(locale, { weekday: "long", day: "numeric", month: "long", year: "numeric" });
     const a = parseDay(start), b = parseDay(end);
@@ -2411,7 +2427,10 @@ ${docCss()}
       const { timed, allday } = solo ? personDay(me.personId, d) : agencyDay(d, people);
       // Reported positions: for the office, one chip per place with how many people; for staff, their own.
       const places = new Map(); for (const p of pins) places.set(p.loc, (places.get(p.loc) || new Set()).add(p.pid));
-      const chips = solo ? [] : [...places.entries()].map(([loc, who]) => ({ kind: "here", title: loc, note: who.size === 1 ? personName([...who][0]).split(" ")[0] : `${who.size} persone`, act: `data-act="cal-goto" data-day="${d}"` }));
+      const whoAll = new Set(pins.map((x) => x.pid));
+      const chips = solo || !places.size ? [] : [{ kind: "here", act: `data-act="cal-goto" data-day="${d}"`,
+        title: places.size === 1 ? [...places.keys()][0] : `Posizioni: ${places.size} luoghi`,
+        note: whoAll.size === 1 ? personName([...whoAll][0]).split(" ")[0] : `${whoAll.size} persone` }];
       return { day: d, cls: d === today ? "today" : "", timed, allday: [...allday, ...chips], pins: solo ? pins : [],
         head: `<button type="button" class="tg-day" data-act="cal-goto" data-day="${d}" title="Apri il giorno"><span>${dt.toLocaleDateString(locale, { weekday: "short" })}</span><b>${dt.getDate()}</b></button>` };
     });

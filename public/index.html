@@ -125,6 +125,7 @@
         <div class="seg admin" role="group" aria-label="Mostra" id="job-seg">
           <button type="button" data-jv="list" aria-pressed="true">Prenotazioni</button>
           <button type="button" data-jv="clients" aria-pressed="false">Clienti</button>
+          <button type="button" data-jv="archive" aria-pressed="false">Archivio</button>
         </div>
         <span class="grow"></span>
         <input class="input search" id="job-q" type="search" placeholder="Cerca cliente, lavoro o luogo" aria-label="Cerca lavori">
@@ -325,6 +326,7 @@
     <div class="sheet-body">
       <div class="field"><label for="yf-person">Pagato a</label><select id="yf-person"></select></div>
       <div class="calc" id="yf-bal"></div>
+      <div class="field" id="yf-job-wrap" hidden><label for="yf-job">Per il lavoro</label><select id="yf-job"></select><span class="hint">Così il lavoro risulta pagato per questa persona.</span></div>
       <div class="grid2">
         <div class="field"><label for="yf-amount">Compensi pagati</label><input id="yf-amount" class="money-in" type="number" min="0" step="0.01" inputmode="decimal"></div>
         <div class="field"><label for="yf-date">Data</label><input id="yf-date" type="date" required></div>

@@ -85,7 +85,7 @@ await push(admin, PEOPLE.map(({ key }) => {
 // Jobs
 await push(admin, JOBS.map((j) => ({ c: "jobs", id: j.id, data: {
   client: j.client, title: j.title, date: day(j.from), endDate: j.to > j.from ? day(j.to) : "", call: j.call, location: j.location, notes: "",
-  people: j.crew.map((k) => P[k].id), billing: j.billing, fee: j.billing === "flat" ? j.amount : 0, clientRate: j.billing === "hourly" ? j.amount : 0, invoiceStatus: j.inv,
+  people: j.crew.map((k) => P[k].id), billing: j.billing, fee: j.billing === "flat" ? j.amount : 0, clientRate: j.billing === "hourly" ? j.amount : 0, invoiceStatus: j.inv, clientPaidAt: j.inv === "paid" ? day(-4) : "",
 } })));
 
 // Hours on every past job day (and today), logged by the office: approved.
@@ -118,7 +118,7 @@ const first = JOBS[0], pays = [], reimbursed = [];
 for (const k of first.crew) {
   const recs = receipts.filter((r) => r.data.personId === P[k].id && r.data.jobId === first.id);
   const recAmt = round2(recs.reduce((a, r) => a + r.data.amount, 0));
-  pays.push({ c: "payments", id: rid("y"), data: { personId: P[k].id, date: day(-6), amount: earned[first.id][k], method: "Bank transfer", note: `${first.client} · ${first.title}`, receiptIds: recs.map((r) => r.id), receiptsAmount: recAmt } });
+  pays.push({ c: "payments", id: rid("y"), data: { personId: P[k].id, date: day(-6), amount: earned[first.id][k], method: "Bank transfer", note: `${first.client} · ${first.title}`, receiptIds: recs.map((r) => r.id), receiptsAmount: recAmt, jobId: first.id } });
   for (const r of recs) reimbursed.push({ c: "receipts", id: r.id, data: { ...r.data, status: "reimbursed", reimbursedAt: day(-6) } });
 }
 // …and Aurora got an advance in cash.

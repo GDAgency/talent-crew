@@ -250,7 +250,7 @@ function forceShiftTerms(prev, data) {
 // ---------- Sync ----------
 // Jobs (bookings) are admin-only to write: applyChange's staff branch denies any
 // collection it doesn't list. Staff can read jobs, but not the client billing on them.
-const JOB_MONEY_FIELDS = ["billing", "fee", "clientRate", "invoiceStatus"];
+const JOB_MONEY_FIELDS = ["billing", "fee", "clientRate", "invoiceStatus", "clientPaidAt", "crewPaid", "archived", "archivedAt"];
 // Staff see only their own money. A login linked to a person on the board gets that
 // person's rates, hours, receipts and payments, plus any hours or receipts the login
 // entered itself. Everyone else on the board comes through as name, role and location,
@@ -403,6 +403,15 @@ function auditChange(user, c, id, prev, data) {
     else verb = "person.edit";
   } else if (c === "settings") {
     verb = "settings.edit"; info = { currency: str(cur.currency, 8) };
+  } else if (c === "jobs") {
+    // Only the settling of a job is history: client paid, a person ticked as paid, archived.
+    if (add || del) return;
+    info = { title: str([cur.title, cur.client].filter(Boolean).join(" · "), 120) };
+    const paidNow = Object.keys(data.crewPaid || {}).find((k) => !(prev.crewPaid || {})[k]);
+    if (!!prev.archived !== !!data.archived) verb = data.archived ? "job.archive" : "job.unarchive";
+    else if (prev.invoiceStatus !== data.invoiceStatus && data.invoiceStatus === "paid") verb = "job.clientpaid";
+    else if (paidNow) { verb = "job.crewpaid"; personId = paidNow; }
+    else return;
   } else if (c === "places") {
     verb = add ? "place.add" : del ? "place.delete" : "place.edit"; info = { name: str(cur.name, 120) };
   } else return;

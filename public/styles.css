@@ -951,3 +951,24 @@ details.more > .grid2, details.more > .field { margin-top: 4px; }
 .ev.flat { position: static; }
 .hint-add { margin-left: auto; font-style: italic; }
 @media (max-width: 820px) { .hint-add { margin-left: 0; flex-basis: 100%; } .tg-in { grid-template-columns: 46px repeat(var(--cols), minmax(var(--colmin), 1fr)); } }
+
+/* ---------- Settling a job: client paid us / we paid the people / archive ---------- */
+.settle { border: 1px solid var(--line-strong); border-radius: var(--r-lg); overflow: hidden; margin: 4px 0 6px; background: var(--surface); }
+.settle-side { padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; }
+.settle-side + .settle-side { border-top: 1px solid var(--line); }
+.settle-h { display: flex; gap: 12px; align-items: flex-start; }
+.settle-h h4 { margin: 0; font-size: var(--t-md); font-weight: 650; }
+.settle-h p { margin: 2px 0 0; font-size: var(--t-sm); color: var(--muted); }
+.settle .step { flex: none; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; border: 1.5px solid var(--line-strong); font-family: var(--f-mono); font-size: 12px; font-weight: 600; color: var(--muted); }
+.settle .step.ok { background: var(--paid); border-color: var(--paid); color: var(--surface); }
+.settle .seg { align-self: flex-start; }
+.settle .seg button:disabled { opacity: .6; cursor: default; }
+.settle-people { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.settle-people li { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 9px 0; border-top: 1px solid var(--line); }
+.sp-who { display: flex; flex-direction: column; flex: 1 1 150px; min-width: 0; }
+.sp-who b { font-weight: 650; }
+.sp-who .mono { font-size: var(--t-sm); color: var(--muted); }
+.sp-acts { display: flex; gap: 6px; margin-left: auto; }
+.settle-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 12px 16px; border-top: 1px solid var(--line); background: var(--sunken); font-size: var(--t-sm); color: var(--ink-2); }
+.settle-foot.done { background: var(--paid-wash); color: var(--ink); }
+.jmoney .pill + .pill { margin-top: 4px; }

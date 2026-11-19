@@ -581,7 +581,7 @@
         return `<tr>
           <td>${fmtShort(p.date)}${unsyncedTag("payments", p.id) ? `<span class="sub">${unsyncedTag("payments", p.id)}</span>` : ""}</td>
           <td class="who">${esc(personName(p.personId))}</td>
-          <td>${esc(methodLabel(p.method))}${p.note ? `<span class="sub">${esc(p.note)}</span>` : ""}</td>
+          <td>${esc(methodLabel(p.method))}${p.note ? `<span class="sub">${esc(p.note)}</span>` : ""}${p.jobId && state.jobs.some((j) => j.id === p.jobId) && jobLabel(state.jobs.find((j) => j.id === p.jobId)) !== p.note ? `<span class="sub">Per: ${esc(jobLabel(state.jobs.find((j) => j.id === p.jobId)))}</span>` : ""}</td>
           <td class="n">${money(p.amount)}</td>
           <td class="n">${rec ? `${money(rec)}<span class="sub">${n} ${n === 1 ? "ricevuta" : "ricevute"}</span>` : `<span class="muted">—</span>`}</td>
           <td class="n">${money(t)}</td>
@@ -1085,15 +1085,35 @@
     $("#yf-rec-wrap").hidden = !open.length;
     $("#yf-rec-lbl").textContent = (open.length === 1 ? `Rimborsa anche 1 ricevuta (${money(b.rec)}) con questo pagamento` : `Rimborsa anche ${open.length} ricevute (${money(b.rec)}) con questo pagamento`);
   }
-  function openPay(personId) {
+  let payJob = "";
+  function payJobs() {
+    const pid = $("#yf-person").value, sel = $("#yf-job");
+    const jobs = state.jobs.filter((j) => !j.archived && ((j.people || []).includes(pid) || state.shifts.some((x) => x.jobId === j.id && x.personId === pid))).sort((a, b) => byStart(b, a));
+    sel.innerHTML = `<option value="">Nessun lavoro in particolare</option>` + jobs.map((j) => { const c = crewPay(j).find((x) => x.pid === pid); return `<option value="${j.id}">${esc(jobLabel(j))} · ${fmtShort(j.date)}${c && c.done ? " · già pagato" : c && c.due ? ` · da pagare ${money(c.due)}` : ""}</option>`; }).join("");
+    sel.value = jobs.some((j) => j.id === payJob) ? payJob : "";
+    $("#yf-job-wrap").hidden = !jobs.length;
+    payForJob();
+  }
+  function payForJob() {
+    const j = state.jobs.find((x) => x.id === $("#yf-job").value), pid = $("#yf-person").value;
+    if (!j) return payInfo();
+    const c = crewPay(j).find((x) => x.pid === pid);
+    $("#yf-amount").value = (c ? c.due : 0).toFixed(2);
+    if (!$("#yf-note").value.trim() || $("#yf-note").dataset.auto === "1") { $("#yf-note").value = jobLabel(j); $("#yf-note").dataset.auto = "1"; }
+  }
+  $("#yf-job").addEventListener("change", () => { payJob = $("#yf-job").value; if (!payJob && $("#yf-note").dataset.auto === "1") $("#yf-note").value = ""; payForJob(); });
+  $("#yf-note").addEventListener("input", () => { $("#yf-note").dataset.auto = ""; });
+  function openPay(personId, jobId) {
     if (!isAdmin() || needPeople()) return;
+    payJob = jobId || "";
     const bal = balances();
     personOptions($("#yf-person"), personId || ui.pPerson || state.people.slice().sort(byName).find((p) => (bal.get(p.id)?.owed || 0) > 0.004)?.id || state.people[0]?.id);
     $("#yf-date").value = isoDay(); $("#yf-note").value = ""; $("#yf-rec").checked = true;
-    showErr($("#yf-err"), ""); payInfo();
+    $("#yf-note").dataset.auto = "";
+    showErr($("#yf-err"), ""); payInfo(); payJobs();
     openSheet("#d-pay");
   }
-  $("#yf-person").addEventListener("change", payInfo);
+  $("#yf-person").addEventListener("change", () => { payInfo(); payJobs(); });
   $("#d-pay form").addEventListener("submit", (e) => {
     e.preventDefault();
     const err = $("#yf-err");
@@ -1104,7 +1124,7 @@
     if (amount < 0) return showErr(err, "L'importo non può essere negativo.");
     if (amount === 0 && !recs.length) return showErr(err, "Inserisci i compensi pagati, oppure spunta la casella delle ricevute.");
     attempt(e.currentTarget, err, async () => {
-      await save("payments", { personId: pid, date, amount: round2(amount), method: $("#yf-method").value, note: $("#yf-note").value.trim(), receiptIds: recs.map((r) => r.id), receiptsAmount: recAmt });
+      await save("payments", { personId: pid, date, amount: round2(amount), method: $("#yf-method").value, note: $("#yf-note").value.trim(), receiptIds: recs.map((r) => r.id), receiptsAmount: recAmt, jobId: $("#yf-job").value || "" });
       for (const r of recs) await save("receipts", { ...r, status: "reimbursed", reimbursedAt: date });
       $("#d-pay").close(); toast(`Registrati ${money(amount + recAmt)} a ${personName(pid)}`);
     });
@@ -1656,13 +1676,17 @@ ${docCss()}
       "person.checkin": i.location ? (self ? `ha segnalato la propria posizione: ${esc(i.location)}` : `ha segnalato ${X} a ${esc(i.location)}`) : `ha cancellato ${self ? "la propria posizione" : `la posizione di ${X}`}`,
       "person.delete": `ha rimosso ${P} dalla squadra`,
       "settings.edit": `ha impostato la valuta su ${esc(i.currency || "")}`,
+      "job.clientpaid": `ha segnato che il cliente ha pagato ${esc(i.title || "un lavoro")}`,
+      "job.crewpaid": `ha segnato ${P} come pagato/a per ${esc(i.title || "un lavoro")}`,
+      "job.archive": `ha archiviato ${esc(i.title || "un lavoro")}: cliente e squadra pagati`,
+      "job.unarchive": `ha ripristinato ${esc(i.title || "un lavoro")} dall'archivio`,
       "place.add": `ha salvato il luogo ${esc(i.name || "")}`,
       "place.edit": `ha rinominato un luogo salvato in ${esc(i.name || "")}`,
       "place.delete": `ha rimosso il luogo salvato ${esc(i.name || "")}`,
-      "account.add": `ha creato un accesso ${i.role === "admin" ? "amministratore" : "staff"} per ${T}`,
+      "account.add": `ha creato un accesso ${i.role === "admin" ? "amministratore" : "collaboratore"} per ${T}`,
       "account.link": `ha collegato l'accesso di ${T} a ${P}`,
       "account.unlink": `ha scollegato l'accesso di ${T} da ${P}`,
-      "account.role": `ha reso ${T} ${i.role === "admin" ? "amministratore" : "staff"}`,
+      "account.role": `ha reso ${T} ${i.role === "admin" ? "amministratore" : "collaboratore"}`,
       "account.disable": `ha disattivato l'accesso di ${T}`,
       "account.enable": `ha riattivato l'accesso di ${T}`,
       "account.password": `ha reimpostato la password di ${T}`,
@@ -1767,6 +1791,32 @@ ${docCss()}
     const billed = j.billing === "hourly" ? hours * (Number(j.clientRate) || 0) : Number(j.fee) || 0;
     return { shifts, recs, hours, wages: round2(wages), exp: round2(exp), billed: round2(billed), cost: round2(wages + exp), margin: round2(billed - wages - exp) };
   }
+  // Settling a job has two sides: the client pays the agency, the agency pays each person
+  // for their hours on it. A person counts as paid for a job when payments linked to it
+  // cover what they earned there, or when the office ticks them off by hand (paid some other way).
+  function crewPay(j) {
+    const ids = [...new Set([...crewOf(j), ...state.shifts.filter((s) => s.jobId === j.id && state.people.some((p) => p.id === s.personId)).map((s) => s.personId)])];
+    return ids.map((pid) => {
+      const earned = round2(state.shifts.filter((s) => s.jobId === j.id && s.personId === pid && counts(s)).reduce((a, s) => a + shiftCost(s), 0));
+      const pays = state.payments.filter((x) => x.jobId === j.id && x.personId === pid);
+      const paid = round2(pays.reduce((a, x) => a + (Number(x.amount) || 0), 0));
+      const manual = j.crewPaid?.[pid] || "";
+      const done = !!manual || (earned > 0.004 && paid >= earned - 0.004);
+      const at = manual || pays.map((x) => x.date || "").sort().pop() || "";
+      return { pid, earned, paid, manual, done, at, due: done ? 0 : round2(Math.max(0, earned - paid)), idle: !done && earned < 0.005 };
+    });
+  }
+  function settle(j) {
+    const crew = crewPay(j), owed = crew.filter((c) => !c.idle);
+    const clientPaid = invOf(j) === "paid", crewDone = owed.every((c) => c.done);
+    return { crew, clientPaid, crewDone, nPaid: owed.filter((c) => c.done).length, nOwed: owed.length, done: clientPaid && crewDone };
+  }
+  function crewPill(j, st = settle(j)) {
+    if (!st.nOwed) return "";
+    return st.crewDone ? `<span class="pill paid">Squadra pagata</span>` : `<span class="pill owed">Squadra ${st.nPaid}/${st.nOwed}</span>`;
+  }
+  const clientPill = (j) => (invOf(j) === "paid" ? `<span class="pill paid">Cliente ha pagato</span>` : invPill(j));
+
   // Billed amount; an hourly job with nothing logged yet shows its rate instead of 0.
   const billedLabel = (j, mm) => (j.billing === "hourly" && !mm.hours ? `${money(j.clientRate)} / h` : money(mm.billed));
   function invPill(j) {
@@ -1814,8 +1864,16 @@ ${docCss()}
         : empty("Ancora nessun lavoro prenotato", "I lavori compaiono qui quando un amministratore li prenota.");
       return;
     }
+    const nArch = state.jobs.filter((j) => j.archived).length, ab = $('#job-seg [data-jv="archive"]');
+    ab.textContent = nArch ? `Archivio · ${nArch}` : "Archivio";
     if (jui.view === "clients") return renderClients(el);
-    const list = jobsMatching();
+    if (jui.view === "archive") {
+      const arch = jobsMatching().filter((j) => j.archived).sort((a, b) => (b.archivedAt || "").localeCompare(a.archivedAt || "") || byStart(b, a));
+      el.innerHTML = arch.length ? `<p class="totals-line">Lavori chiusi: il cliente ha pagato e la squadra è stata pagata. Restano qui per consultazione.</p><div class="jlist">${arch.map(jobCard).join("")}</div>`
+        : empty(nArch ? "Nessun lavoro corrisponde" : "Archivio vuoto", nArch ? "Prova un'altra ricerca." : "Quando il cliente ha pagato e tutta la squadra è stata pagata per un lavoro, puoi archiviarlo: lo trovi qui.");
+      return;
+    }
+    const list = jobsMatching().filter((j) => !j.archived);
     if (!list.length) { el.innerHTML = empty("Nessun lavoro corrisponde", "Prova un'altra ricerca."); return; }
     const today = isoDay(), tmw = addDays(today, 1), week = addDays(today, 7);
     const groups = [["Oggi", []], ["Domani", []], ["Questa settimana", []], ["Più avanti", []]], past = [];
@@ -1837,7 +1895,7 @@ ${docCss()}
     const today = isoDay(), on = jobOn(j, today), [y, m, d] = (j.date || "").split("-").map(Number);
     const dt = new Date(y, (m || 1) - 1, d || 1), crew = crewOf(j);
     const meta = [jobEnd(j) > j.date ? `Fino a ${fmtShort(jobEnd(j))}` : "", j.call ? `Convocazione ${esc(j.call)}` : "", esc(j.location || "")].filter(Boolean).join(" · ");
-    const bill = isAdmin() ? `<span class="jmoney"><b>${billedLabel(j, jobMoney(j))}</b>${invPill(j)}</span>` : "";
+    const bill = isAdmin() ? `<span class="jmoney"><b>${billedLabel(j, jobMoney(j))}</b>${clientPill(j)}${crewPill(j)}</span>` : "";
     return `<button class="jcard ${on ? "on" : ""} ${jobEnd(j) < today ? "past" : ""}" type="button" data-act="job-open" data-id="${j.id}">
       <span class="jdate"><span>${dt.toLocaleDateString(locale, { weekday: "short" })}</span><b>${d || "?"}</b><span>${dt.toLocaleDateString(locale, { month: "short" })}</span></span>
       <span class="jbody">
@@ -1909,7 +1967,7 @@ ${docCss()}
         <div><span class="eyebrow">Costo</span><span class="v">${money(mm.cost)}</span><span class="sub">Compensi ${money(mm.wages)} · ricevute ${money(mm.exp)}</span></div>
         <div><span class="eyebrow">Margine</span><span class="v ${mm.margin < -0.004 ? "neg" : "pos"}">${money(mm.margin)}</span><span class="sub">${mm.billed > 0.004 ? `${Math.round((mm.margin / mm.billed) * 100)}% del fatturato` : "Ancora niente fatturato"}</span></div>
       </div>
-      <div class="jinv"><span class="eyebrow">Fattura</span><div class="seg" role="group" aria-label="Stato della fattura">${Object.entries(INV).map(([v, l]) => `<button type="button" data-act="job-inv" data-id="${j.id}" data-v="${v}" aria-pressed="${st === v}">${l}</button>`).join("")}</div></div>` : ""}
+      ${settleBox(j)}` : ""}
       <h4 class="eyebrow">Prenotati · ${crew.length}</h4>
       ${crew.length ? `<div class="crew">${crew.map((pid) => {
         const p = state.people.find((x) => x.id === pid), h = hoursBy.get(pid) || 0;
@@ -1925,6 +1983,32 @@ ${docCss()}
         ${mm.recs.map((r) => `<tr><td>${fmtShort(r.date)}</td><td><button class="btn quiet sm" type="button" data-act="view-receipt" data-id="${r.id}">${esc(r.description || "Ricevuta")}</button></td><td>${esc(personName(r.personId))}</td><td class="n">${money(r.amount)}</td></tr>`).join("")}
       </tbody></table></div>` : ""}
       ${a ? `<div class="sheet-foot"><button class="btn" type="button" data-act="job-edit" data-id="${j.id}">Modifica lavoro</button></div>` : ""}`;
+  }
+
+  // Has the client paid us, have we paid the people: the two sides of a job, and its archive.
+  function settleBox(j) {
+    const st = settle(j), inv = invOf(j);
+    const rows = st.crew.map((c) => {
+      const state_ = c.done ? `<span class="pill paid">Pagato${c.at ? ` · ${fmtShort(c.at)}` : ""}</span>` : c.idle ? `<span class="pill wait">Nessuna ora approvata</span>` : `<span class="pill owed">Da pagare ${money(c.due)}</span>`;
+      const acts = j.archived ? "" : c.manual ? `<button class="btn quiet sm" type="button" data-act="job-unmark" data-id="${j.id}" data-person="${c.pid}">Annulla</button>`
+        : c.done || c.idle ? "" : `<button class="btn sm primary" type="button" data-act="job-pay" data-id="${j.id}" data-person="${c.pid}">${ICON.card}Paga</button><button class="btn quiet sm" type="button" data-act="job-mark" data-id="${j.id}" data-person="${c.pid}" title="Già pagato in altro modo">Già pagato</button>`;
+      return `<li><span class="sp-who"><b>${esc(personName(c.pid))}</b><span class="mono">${money(c.earned)}${c.paid && !c.done ? ` · pagati ${money(c.paid)}` : ""}</span></span>${state_}<span class="sp-acts">${acts}</span></li>`;
+    }).join("");
+    const foot = j.archived
+      ? `<div class="settle-foot done"><span><b>Archiviato${j.archivedAt ? ` il ${fmtDate(j.archivedAt)}` : ""}.</b> Cliente e squadra pagati.</span><button class="btn sm" type="button" data-act="job-unarchive" data-id="${j.id}">Ripristina</button></div>`
+      : st.done ? `<div class="settle-foot done"><span><b>Tutto saldato.</b> Il cliente ha pagato e la squadra è stata pagata.</span><button class="btn sm ink" type="button" data-act="job-archive" data-id="${j.id}">Archivia</button></div>`
+      : `<div class="settle-foot"><span>Per archiviare manca: ${[st.clientPaid ? "" : "il pagamento del cliente", st.crewDone ? "" : (st.nOwed - st.nPaid === 1 ? "1 persona da pagare" : `${st.nOwed - st.nPaid} persone da pagare`)].filter(Boolean).join(" e ")}.</span></div>`;
+    return `<section class="settle">
+      <div class="settle-side">
+        <div class="settle-h"><span class="step ${st.clientPaid ? "ok" : ""}">1</span><div><h4>Il cliente ci ha pagato?</h4><p>${st.clientPaid ? `Sì${j.clientPaidAt ? `, il ${fmtDate(j.clientPaidAt)}` : ""}.` : inv === "invoiced" ? "Fattura inviata, in attesa del pagamento." : "Non ancora fatturato."}</p></div></div>
+        <div class="seg" role="group" aria-label="Pagamento del cliente">${Object.entries(INV).map(([v, l]) => `<button type="button" data-act="job-inv" data-id="${j.id}" data-v="${v}" aria-pressed="${inv === v}" ${j.archived ? "disabled" : ""}>${v === "paid" ? "Ha pagato" : l}</button>`).join("")}</div>
+      </div>
+      <div class="settle-side">
+        <div class="settle-h"><span class="step ${st.crewDone && st.nOwed ? "ok" : ""}">2</span><div><h4>Abbiamo pagato la squadra?</h4><p>${!st.nOwed ? "Ancora nessuna ora approvata su questo lavoro." : st.crewDone ? "Sì, tutti pagati per questo lavoro." : `${st.nPaid} su ${st.nOwed} pagati per questo lavoro.`}</p></div></div>
+        ${rows ? `<ul class="settle-people">${rows}</ul>` : ""}
+      </div>
+      ${foot}
+    </section>`;
   }
 
   // Job form (admins)
@@ -1977,7 +2061,7 @@ ${docCss()}
         ...(prev || {}), client, title, date, endDate: end > date ? end : "", call: $("#jf-call").value, wrap: $("#jf-wrap").value, location: $("#jf-loc").value.trim(),
         notes: $("#jf-notes").value.trim(), people: [...pickedPeople()], billing,
         fee: billing === "flat" ? round2(amt) : Number(prev?.fee) || 0, clientRate: billing === "hourly" ? round2(amt) : Number(prev?.clientRate) || 0,
-        invoiceStatus: $("#jf-inv").value,
+        invoiceStatus: $("#jf-inv").value, clientPaidAt: $("#jf-inv").value === "paid" ? prev?.clientPaidAt || isoDay() : "",
       });
       $("#d-jobform").close();
       toast(prev ? "Lavoro salvato" : `${jobName(rec)} prenotato${sync.online ? "" : " · salvato su questo dispositivo"}`);
@@ -2030,11 +2114,11 @@ ${docCss()}
   function exportJobs() {
     const a = isAdmin();
     const head = ["Data", "Fino a", "Cliente", "Lavoro", "Posizione", "Convocazione", "Prenotati", "Ore registrate"];
-    if (a) head.push("Il cliente paga", "Compenso", "Tariffa cliente", "Fatturato", "Compensi", "Ricevute", "Costo", "Margine", "Fattura");
+    if (a) head.push("Il cliente paga", "Compenso", "Tariffa cliente", "Fatturato", "Compensi", "Ricevute", "Costo", "Margine", "Fattura", "Cliente ha pagato il", "Squadra pagata", "Archiviato il");
     const rows = jobsMatching().sort((x, y) => byStart(y, x)).map((j) => {
       const mm = jobMoney(j);
       const r = [j.date, jobEnd(j) > j.date ? jobEnd(j) : "", j.client, j.title, j.location, j.call, crewOf(j).map(personName).join("; "), round2(mm.hours)];
-      if (a) r.push(j.billing === "hourly" ? "A ore" : "Compenso fisso", j.billing === "hourly" ? "" : round2(j.fee), j.billing === "hourly" ? round2(j.clientRate) : "", mm.billed, mm.wages, mm.exp, mm.cost, mm.margin, INV[invOf(j)]);
+      if (a) r.push(j.billing === "hourly" ? "A ore" : "Compenso fisso", j.billing === "hourly" ? "" : round2(j.fee), j.billing === "hourly" ? round2(j.clientRate) : "", mm.billed, mm.wages, mm.exp, mm.cost, mm.margin, INV[invOf(j)], invOf(j) === "paid" ? j.clientPaidAt || "sì" : "", (() => { const st = settle(j); return st.nOwed ? `${st.nPaid}/${st.nOwed}` : ""; })(), j.archived ? j.archivedAt || "sì" : "");
       return r;
     });
     download(`lavori-${isoDay()}.csv`, [head, ...rows]);
@@ -2054,8 +2138,27 @@ ${docCss()}
       case "job-export": return exportJobs();
       case "job-inv": {
         const j = state.jobs.find((x) => x.id === id);
-        if (!j || !isAdmin() || invOf(j) === t.dataset.v) return;
-        return save("jobs", { ...j, invoiceStatus: t.dataset.v }).then(() => toast(`Segnato come ${INV[t.dataset.v].toLowerCase()}`));
+        if (!j || !isAdmin() || j.archived || invOf(j) === t.dataset.v) return;
+        const paid = t.dataset.v === "paid";
+        return save("jobs", { ...j, invoiceStatus: t.dataset.v, clientPaidAt: paid ? isoDay() : "" }).then(() => toast(paid ? "Il cliente ha pagato: segnato" : `Segnato come ${INV[t.dataset.v].toLowerCase()}`));
+      }
+      case "job-pay": return openPay(t.dataset.person, id);
+      case "job-mark": case "job-unmark": {
+        const j = state.jobs.find((x) => x.id === id), pid = t.dataset.person;
+        if (!j || !isAdmin() || j.archived) return;
+        const crewPaid = { ...(j.crewPaid || {}) };
+        if (t.dataset.act === "job-mark") crewPaid[pid] = isoDay(); else delete crewPaid[pid];
+        return save("jobs", { ...j, crewPaid }).then(() => toast(t.dataset.act === "job-mark" ? `${personName(pid)}: segnato come pagato per questo lavoro` : "Segno rimosso"));
+      }
+      case "job-archive": {
+        const j = state.jobs.find((x) => x.id === id);
+        if (!j || !isAdmin() || !settle(j).done) return;
+        return save("jobs", { ...j, archived: true, archivedAt: isoDay() }).then(() => { $("#d-job").close(); toast(`${jobName(j)} archiviato`); });
+      }
+      case "job-unarchive": {
+        const j = state.jobs.find((x) => x.id === id);
+        if (!j || !isAdmin()) return;
+        return save("jobs", { ...j, archived: false, archivedAt: "" }).then(() => toast("Lavoro ripristinato"));
       }
     }
   });

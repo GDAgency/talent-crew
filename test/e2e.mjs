@@ -226,6 +226,39 @@ await step("calendar", async () => {
   await mob.screenshot({ path: OUT + "/13-office-calendar-phone.png", fullPage: true });
 });
 
+// ---------- Settling a job: client paid us, we paid the people, archive ----------
+await step("settling", async () => {
+  const card = '.jcard:has-text("Campagna inverno")';
+  await a.goto(ADMIN + "/#calendar"); await a.waitForSelector('[data-view="calendar"]:not([hidden])');
+  await a.click('#cal-seg [data-cv="list"]'); await a.click('#job-seg [data-jv="list"]'); await a.click(card); await a.waitForSelector("#d-job[open]");
+  ok("new job: nothing to archive yet", (await a.locator('[data-act="job-archive"]').count()) === 0 && (await a.textContent(".settle-foot")).includes("manca"), await a.textContent(".settle-foot"));
+  await a.click('#d-job [data-act="job-log"]'); await a.waitForSelector("#d-shift[open]"); await a.fill("#sf-hours", "3");
+  await a.click('#d-shift [type="submit"]'); await a.waitForSelector("#d-shift", hidden); await a.waitForTimeout(600);
+  const row = '.settle-people li:has-text("Luca")';
+  ok("Luca is owed 3 h × €38 for this job", (await a.textContent(row)).includes("Da pagare") && (await a.textContent(row)).includes("114,00"), await a.textContent(row));
+  await a.click(`${row} [data-act="job-pay"]`); await a.waitForSelector("#d-pay[open]");
+  ok("payment form is for this job and this amount", (await a.$eval("#yf-job", (e) => e.selectedOptions[0].textContent)).includes("Campagna inverno") && (await a.inputValue("#yf-amount")) === "114.00", await a.inputValue("#yf-amount"));
+  await a.click('#d-pay [type="submit"]'); await a.waitForSelector("#d-pay", hidden); await a.waitForTimeout(800);
+  ok("after paying, Luca is paid for this job", (await a.textContent(row)).includes("Pagato") && (await a.locator(`${row} [data-act="job-pay"]`).count()) === 0, await a.textContent(row));
+  ok("crew paid but client not: still can't archive", (await a.locator('[data-act="job-archive"]').count()) === 0 && (await a.textContent(".settle-foot")).includes("cliente"));
+  await a.click('.settle [data-act="job-inv"][data-v="paid"]'); await a.waitForTimeout(600);
+  ok("client paid + crew paid: settled", (await a.textContent(".settle-foot")).includes("Tutto saldato"));
+  await a.screenshot({ path: OUT + "/14-job-settled.png" });
+  await a.click('[data-act="job-archive"]'); await a.waitForSelector("#d-job", hidden); await a.waitForTimeout(600);
+  ok("archived job leaves the bookings list", (await a.locator(card).count()) === 0);
+  await a.click('#job-seg [data-jv="archive"]'); await a.waitForTimeout(300);
+  ok("…and is in the archive", (await a.locator(card).count()) === 1 && (await a.textContent('#job-seg [data-jv="archive"]')).includes("1"));
+  await a.screenshot({ path: OUT + "/15-archive.png" });
+  await a.click(card); await a.waitForSelector("#d-job[open]");
+  ok("archived job keeps its record", (await a.textContent(".settle")).includes("Archiviato il") && (await a.textContent(row)).includes("Pagato"));
+  await a.click('[data-act="job-unarchive"]'); await a.waitForTimeout(600); await a.keyboard.press("Escape");
+  await a.click('#job-seg [data-jv="list"]'); await a.waitForTimeout(300);
+  ok("restoring brings it back", (await a.locator(card).count()) === 1);
+  await synced(a); await s.waitForTimeout(500);
+  const sj = await s.evaluate(async () => (await (await fetch("/api/sync", { method: "POST", headers: { "x-tc": "1", "content-type": "application/json" }, body: '{"since":0,"changes":[]}' })).json()).records.filter((r) => r.c === "jobs").map((r) => Object.keys(r.data)));
+  ok("staff get no payment status of jobs", sj.length > 0 && sj.every((k) => !k.includes("invoiceStatus") && !k.includes("crewPaid") && !k.includes("clientPaidAt")), sj[0]);
+});
+
 console.log("errors:", errors.length ? errors : "none");
 const passed = results.filter((r) => r[0] === "PASS").length;
 console.log(`${passed}/${results.length} passed`);

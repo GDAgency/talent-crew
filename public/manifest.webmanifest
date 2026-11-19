@@ -3,7 +3,7 @@
   "name": "Talent & Crew",
   "short_name": "Talent & Crew",
   "description": "Dove sono i tuoi modelli e tecnici, le ore lavorate, quanto è dovuto e le ricevute da rimborsare.",
-  "start_url": "/#team",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "any",

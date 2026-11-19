@@ -120,3 +120,8 @@ public/            the app: index.html, app.js, styles.css, sw.js (offline), ico
 Dockerfile         container for hosting
 data/              created on first run: the database and photos (back this up)
 ```
+
+
+## End-to-end test
+
+`test/e2e.mjs` drives the whole flow in a headless browser (setup, staff on a phone offline, approvals, payments, statements, staff privacy, calendar). It needs `playwright-core` installed separately; the header of the file has the exact commands. Run it against a throwaway container, never the live site.

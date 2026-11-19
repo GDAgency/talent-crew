@@ -43,7 +43,7 @@ const roleAllowed = (site, role) => site === "any" || (site === "admin" && role 
 const siteUrl = (hosts) => (hosts[0] ? `https://${hosts[0]}` : null);
 function wrongSiteMessage(site) {
   return site === "admin"
-    ? `Questo è il sito dell'ufficio, per gli amministratori. Il team accede da ${CLIENT_HOSTS[0] || "il sito del team"}.`
+    ? `Questo è il sito dell'ufficio, per gli amministratori. La squadra accede da ${CLIENT_HOSTS[0] || "il sito della squadra"}.`
     : `Gli amministratori accedono dal sito dell'ufficio: ${ADMIN_HOSTS[0] || "il sito dell'ufficio"}.`;
 }
 
@@ -99,6 +99,7 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS audit_person ON audit(person_id, id);
   CREATE INDEX IF NOT EXISTS audit_user ON audit(user_id, id);
+  CREATE INDEX IF NOT EXISTS audit_verb_at ON audit(verb, at);
   CREATE TRIGGER IF NOT EXISTS audit_no_update BEFORE UPDATE ON audit BEGIN SELECT RAISE(ABORT, 'audit is append-only'); END;
   CREATE TRIGGER IF NOT EXISTS audit_no_delete BEFORE DELETE ON audit BEGIN SELECT RAISE(ABORT, 'audit is append-only'); END;
 `);
@@ -123,6 +124,8 @@ const q = {
   bumpRev: db.prepare("UPDATE counters SET value = value + 1 WHERE name = 'rev' RETURNING value"),
   curRev: db.prepare("SELECT value FROM counters WHERE name = 'rev'"),
   insertAudit: db.prepare("INSERT INTO audit (at, user_id, actor, verb, c, rec_id, person_id, person_name, info) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"),
+  checkins: db.prepare(`SELECT at, person_id, info FROM audit WHERE verb = 'person.checkin' AND at >= ? AND at < ?
+    AND (? = '' OR person_id = ?) ORDER BY at LIMIT 5000`),
   auditPage: db.prepare(`SELECT a.*, u.name AS cur_name FROM audit a LEFT JOIN users u ON u.id = a.user_id
     WHERE a.id < ? AND (? = '' OR a.person_id = ?) AND (? = '' OR a.user_id = ?) ORDER BY a.id DESC LIMIT ?`),
 };
@@ -652,6 +655,16 @@ async function route(req, res) {
       entries: page.map((r) => ({ id: r.id, at: r.at, userId: r.user_id, actor: r.cur_name || r.actor, verb: r.verb, c: r.c, recId: r.rec_id, personId: r.person_id, personName: r.person_name, info: JSON.parse(r.info) })),
       next: rows.length > limit ? page[page.length - 1].id : null,
     });
+  }
+
+  // Where people said they were, for the calendar: every check-in between two times.
+  // Admins see everyone; staff only themselves (nothing, if their login isn't linked).
+  if (p === "/api/checkins" && req.method === "GET") {
+    const from = Math.floor(Number(url.searchParams.get("from"))) || 0;
+    const to = Math.min(Math.floor(Number(url.searchParams.get("to"))) || 0, from + 62 * 864e5);
+    const only = user.role === "admin" ? "" : user.person_id || "\u0000";
+    const rows = to > from ? q.checkins.all(from, to, only, only) : [];
+    return send(res, 200, { checkins: rows.map((r) => ({ at: r.at, personId: r.person_id, location: JSON.parse(r.info).location || "" })).filter((c) => c.location) });
   }
 
   // Account management (admin only).

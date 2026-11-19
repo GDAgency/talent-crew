@@ -24,6 +24,7 @@
     card: `<svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12.5" rx="2"/><path d="M3 10h18M7 15h3"/></svg>`,
     doc: `<svg viewBox="0 0 24 24"><path d="M7 3.5h7l4 4v13H7z"/><path d="M14 3.5v4h4"/></svg>`,
     receipt: `<svg viewBox="0 0 24 24"><path d="M6 3.5h12v17l-2-1.4-2 1.4-2-1.4-2 1.4-2-1.4-2 1.4z"/><path d="M9 8.5h6M9 12h6M9 15.5h3.5"/></svg>`,
+    plus: `<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>`,
     person: `<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c.7-3.6 3.4-5.6 7-5.6s6.3 2 7 5.6"/></svg>`,
   };
 
@@ -362,7 +363,7 @@
   // ---------- Rendering ----------
   function render() {
     if (!me) return;
-    if (!location.hash.slice(1) && ui.tab === "team" && staffMe()) return route(); // the first sync just linked this login
+    if (!location.hash.slice(1) && ((ui.tab === "team" && staffMe()) || (ui.tab !== "calendar" && isAdmin()))) return route(); // the first sync just linked this login
     const bal = balances();
     const recOpen = state.receipts.filter((r) => r.status !== "reimbursed" && bal.has(r.personId));
     const navRec = $("#nav-rec"); navRec.textContent = recOpen.length; navRec.hidden = !recOpen.length;
@@ -399,18 +400,18 @@
     const recSum = recOpen.reduce((a, r) => a + (Number(r.amount) || 0), 0);
     $("#summary").hidden = !isAdmin();
     $("#summary").innerHTML = !isAdmin() ? "" : `
-      <div><span class="eyebrow">Da pagare al team</span><span class="big ${owed > 0.004 ? "" : "zero"}">${money(owed)}</span><span class="note">${owedPeople ? (owedPeople === 1 ? "1 persona attende il pagamento" : `${owedPeople} persone attendono il pagamento`) : "Tutti in regola"}</span></div>
+      <div><span class="eyebrow">Da pagare alla squadra</span><span class="big ${owed > 0.004 ? "" : "zero"}">${money(owed)}</span><span class="note">${owedPeople ? (owedPeople === 1 ? "1 persona attende il pagamento" : `${owedPeople} persone attendono il pagamento`) : "Tutti in regola"}</span></div>
       <div><span class="eyebrow">Ore</span><span class="mid">${hrs(hMonth)}</span><span class="note">${money(earnedMonth)} a ${new Date().toLocaleDateString(locale, { month: "long" })}</span></div>
       <div><span class="eyebrow">Ricevute</span><span class="mid">${money(recSum)}</span><span class="note">${recOpen.length} da rimborsare</span></div>
       <div><span class="eyebrow">Posizione segnalata</span><span class="mid">${onJob}<span class="muted">/${state.people.length}</span></span><span class="note">oggi${bookedTodayNote()}</span></div>`;
     const waiting = isAdmin() ? pendingShifts() : [];
-    $("#queue-strip").innerHTML = waiting.length ? `<a class="queue-strip" href="#hours">${ICON.clock}<span><b>${waiting.length === 1 ? "1 voce in attesa" : `${waiting.length} voci in attesa`} di approvazione</b> · <span class="mono">${hrs(waiting.reduce((a, s) => a + (Number(s.hours) || 0), 0))}</span> registrate dallo staff</span><span class="go">Controlla</span></a>` : "";
+    $("#queue-strip").innerHTML = waiting.length ? `<a class="queue-strip" href="#hours">${ICON.clock}<span><b>${waiting.length === 1 ? "1 voce in attesa" : `${waiting.length} voci in attesa`} di approvazione</b> · <span class="mono">${hrs(waiting.reduce((a, s) => a + (Number(s.hours) || 0), 0))}</span> registrate dai collaboratori</span><span class="go">Controlla</span></a>` : "";
 
     const el = $("#board");
     if (!state.people.length) {
       el.innerHTML = isAdmin()
-        ? empty("Ancora nessuno nel team", "Aggiungi modelli e tecnici con la loro tariffa oraria. Poi il team potrà registrare le ore, segnalare la propria posizione e fotografare le ricevute.", "add-person", "Aggiungi la prima persona")
-        : empty("Ancora nessuno nel team", "Un amministratore deve aggiungere il team prima che si possano registrare ore e ricevute.");
+        ? empty("Ancora nessuno nella squadra", "Aggiungi modelli e tecnici con la loro tariffa oraria. Poi la squadra potrà registrare le ore, segnalare la propria posizione e fotografare le ricevute.", "add-person", "Aggiungi la prima persona")
+        : empty("Ancora nessuno nella squadra", "Un amministratore deve aggiungere la squadra prima che si possano registrare ore e ricevute.");
       return;
     }
     const q = ui.q.trim().toLowerCase();
@@ -477,7 +478,7 @@
     if (!rows.length) {
       el.innerHTML = state.people.length
         ? empty(ui.hMonth ? "Nessuna ora registrata questo mese" : "Ancora nessuna ora registrata", "Registra convocazione e fine, o solo le ore. Funziona anche senza campo e si sincronizza quando torni online.", "add-shift", "Registra ore")
-        : empty("Prima aggiungi le persone", isAdmin() ? "Le ore si registrano a nome di qualcuno del team." : "Prima un amministratore deve aggiungere il team.", isAdmin() ? "add-person" : null, "Aggiungi persona");
+        : empty("Prima aggiungi le persone", isAdmin() ? "Le ore si registrano a nome di qualcuno della squadra." : "Prima un amministratore deve aggiungere la squadra.", isAdmin() ? "add-person" : null, "Aggiungi persona");
       return;
     }
     let th = 0, tv = 0, hWait = 0;
@@ -555,7 +556,7 @@
     const rows = state.payments.filter((p) => !ui.pPerson || p.personId === ui.pPerson)
       .sort((a, b) => (b.date || "").localeCompare(a.date || "") || (b.createdAt || 0) - (a.createdAt || 0));
     if (!rows.length) {
-      el.innerHTML = empty("Nessun pagamento registrato", "Registra ogni pagamento quando parte, così il team mostra chi è stato pagato e cosa resta da pagare.", isAdmin() && state.people.length ? "add-payment" : null, "Registra un pagamento");
+      el.innerHTML = empty("Nessun pagamento registrato", "Registra ogni pagamento quando parte, così in Persone si vede chi è stato pagato e cosa resta da pagare.", isAdmin() && state.people.length ? "add-payment" : null, "Registra un pagamento");
       return;
     }
     let total = 0;
@@ -603,8 +604,8 @@
     el.innerHTML = `
       <section class="panel">
         <h2>Il tuo account</h2>
-        <dl class="kv"><dt>Nome</dt><dd>${esc(me.name)}</dd><dt>Nome utente</dt><dd class="mono">${esc(me.username)}</dd><dt>Accesso</dt><dd>${isAdmin() ? "Amministratore" : "Staff"}</dd>
-          <dt>Nel team come</dt><dd>${myPerson() ? `${esc(myPerson().name)} · <a href="#me">La mia pagina</a>` : `<span class="muted">Non collegato${isAdmin() ? " · collegalo in Accessi del team" : " · chiedi a un amministratore di collegare il tuo accesso"}</span>`}</dd></dl>
+        <dl class="kv"><dt>Nome</dt><dd>${esc(me.name)}</dd><dt>Nome utente</dt><dd class="mono">${esc(me.username)}</dd><dt>Accesso</dt><dd>${isAdmin() ? "Amministratore" : "Collaboratore"}</dd>
+          <dt>In squadra come</dt><dd>${myPerson() ? `${esc(myPerson().name)} · <a href="#me">La mia pagina</a>` : `<span class="muted">Non collegato${isAdmin() ? " · collegalo in Accessi della squadra" : " · chiedi a un amministratore di collegare il tuo accesso"}</span>`}</dd></dl>
         <div class="sheet-foot"><button class="btn" type="button" data-act="password">Cambia password</button><button class="btn danger" type="button" id="logout-btn">Esci</button></div>
       </section>
       <section class="panel">
@@ -628,14 +629,14 @@
         <div class="field"><label for="agency-addr">Indirizzo dell'agenzia</label><input id="agency-addr" maxlength="160" autocomplete="street-address" placeholder="${esc(AGENCY_ADDRESS)}" value="${esc(agencyAddress())}"><span class="hint">Sotto il nome, negli estratti conto.</span></div>
       </section>
       <section class="panel wide">
-        <div class="view-head"><div><h2>Accessi del team</h2><p>Lo staff può registrare ore, aggiungere ricevute e aggiornare posizioni. Gli amministratori gestiscono anche persone, tariffe e pagamenti.</p></div>
+        <div class="view-head"><div><h2>Accessi della squadra</h2><p>I collaboratori possono registrare ore, aggiungere ricevute e segnalare la posizione. Gli amministratori gestiscono anche persone, tariffe e pagamenti.</p></div>
           <div class="view-actions"><button class="btn primary" type="button" data-act="add-account">Aggiungi accesso</button></div></div>
         <div id="acct-list">${accountsErr ? `<p class="err">${esc(accountsErr)}</p>` : !accounts ? `<p class="muted">Caricamento…</p>` : accounts.map((a) => `<div class="acct">
-          <div><div class="nm">${esc(a.name)} ${a.disabled ? `<span class="pill over">Disattivato</span>` : ""}</div><div class="un">${esc(a.username)} · ${a.role === "admin" ? "Amministratore" : "Staff"}</div></div>
+          <div><div class="nm">${esc(a.name)} ${a.disabled ? `<span class="pill over">Disattivato</span>` : ""}</div><div class="un">${esc(a.username)} · ${a.role === "admin" ? "Amministratore" : "Collaboratore"}</div></div>
           <div class="ctl">
-            <label class="link-sel"><span>È</span><select data-link="${a.id}" aria-label="Persona del team per ${esc(a.name)}"><option value="">Non nel team</option>${state.people.slice().sort(byName).map((p) => `<option value="${p.id}" ${a.personId === p.id ? "selected" : ""}>${esc(p.name)}</option>`).join("")}</select></label>
+            <label class="link-sel"><span>È</span><select data-link="${a.id}" aria-label="Persona della squadra per ${esc(a.name)}"><option value="">Non in squadra</option>${state.people.slice().sort(byName).map((p) => `<option value="${p.id}" ${a.personId === p.id ? "selected" : ""}>${esc(p.name)}</option>`).join("")}</select></label>
             <button class="btn sm" type="button" data-act="reset-pw" data-id="${a.id}">Reimposta password</button>
-            ${a.id === me.id ? "" : `<button class="btn sm" type="button" data-act="toggle-role" data-id="${a.id}">${a.role === "admin" ? "Rendi staff" : "Rendi amministratore"}</button>
+            ${a.id === me.id ? "" : `<button class="btn sm" type="button" data-act="toggle-role" data-id="${a.id}">${a.role === "admin" ? "Rendi collaboratore" : "Rendi amministratore"}</button>
             <button class="btn sm ${a.disabled ? "" : "danger"}" type="button" data-act="toggle-disabled" data-id="${a.id}">${a.disabled ? "Riattiva" : "Disattiva"}</button>`}
           </div></div>`).join("")}</div>
       </section>
@@ -744,7 +745,7 @@
   }
   function needPeople() {
     if (state.people.length) return false;
-    if (isAdmin()) { toast("Prima aggiungi una persona"); openPerson(); } else toast("Prima un amministratore deve aggiungere il team.");
+    if (isAdmin()) { toast("Prima aggiungi una persona"); openPerson(); } else toast("Prima un amministratore deve aggiungere la squadra.");
     return true;
   }
   async function attempt(form, errEl, fn) {
@@ -803,6 +804,7 @@
     $("#pf-dayrate").value = t.dayRate || "";
     $("#pf-halfrate").value = t.halfDayRate || ""; $("#pf-halfunder").value = t.halfDayUnder || "";
     $("#pf-otafter").value = t.otAfter || ""; $("#pf-otmult").value = p.otMult ? t.otMult : 1.5;
+    $("#pf-more").open = !!(t.otAfter || t.halfDayRate);
     personTermsUI();
   }
   function personTermsUI() {
@@ -843,7 +845,7 @@
       const data = { ...(prev || {}), name, role: $("#pf-role").value, ...terms, speciality: $("#pf-spec").value.trim(), phone: $("#pf-phone").value.trim(), location };
       if (!prev || (prev.location || "") !== location) data.locationAt = Date.now();
       await save("people", data);
-      $("#d-person").close(); toast(prev ? "Salvato" : `${name} aggiunto/a al team`);
+      $("#d-person").close(); toast(prev ? "Salvato" : `${name} aggiunto/a alla squadra`);
     });
   });
   $("#pf-del").addEventListener("click", (e) => {
@@ -1404,11 +1406,12 @@ ${docCss()}
     if (a.dataset.me === String(on)) return;
     a.dataset.me = String(on);
     a.setAttribute("href", on ? "#me" : "#team");
-    const lbl = a.querySelector("span"); lbl.textContent = on ? "La mia pagina" : "Team"; if (on) lbl.dataset.short = "Profilo"; else delete lbl.dataset.short;
+    const lbl = a.querySelector("span"); lbl.textContent = on ? "La mia pagina" : "Persone"; if (on) lbl.dataset.short = "Profilo"; else delete lbl.dataset.short;
+    a.style.order = on ? "-1" : ""; // staff: their own page comes first
     a.querySelector("svg").innerHTML = on ? NAV_SVG.me : NAV_SVG.team;
   }
   function paintMe() {
-    $("#me-chip").innerHTML = `<div><b>${esc(me.name)}</b>${isAdmin() ? "Amministratore" : "Staff"}</div>`;
+    $("#me-chip").innerHTML = `<div><b>${esc(me.name)}</b>${isAdmin() ? "Amministratore" : "Collaboratore"}</div>`;
     render();
   }
 
@@ -1416,13 +1419,14 @@ ${docCss()}
     const el = $("#mypage"), p = myPerson();
     if (!p) {
       el.innerHTML = `<div class="view-head"><div><h1>La mia pagina</h1><p>Le tue ore, le ricevute e quanto ti è dovuto, in un unico posto.</p></div></div>` +
-        empty("Il tuo accesso non è ancora collegato al team", isAdmin() ? "Collega il tuo accesso al tuo nome in Impostazioni → Accessi del team." : "Chiedi a un amministratore di collegare il tuo accesso al tuo nome nel team. Poi qui vedrai le tue ore e il tuo saldo.");
+        empty("Il tuo accesso non è ancora collegato alla squadra", isAdmin() ? "Collega il tuo accesso al tuo nome in Impostazioni → Accessi della squadra." : "Chiedi a un amministratore di collegare il tuo accesso al tuo nome nella squadra. Poi qui vedrai le tue ore e il tuo saldo.");
       return;
     }
     const b = bal.get(p.id), m = isoMonth();
     const desc = (a, c) => (c.date || "").localeCompare(a.date || "") || (c.createdAt || 0) - (a.createdAt || 0);
     const shifts = state.shifts.filter((s) => s.personId === p.id).sort(desc);
     const recs = state.receipts.filter((r) => r.personId === p.id).sort(desc);
+    const pays = state.payments.filter((x) => x.personId === p.id).sort(desc);
     const waitMonth = shifts.filter((s) => approvalOf(s) === "pending" && (s.date || "").startsWith(m)).reduce((a, s) => a + (Number(s.hours) || 0), 0);
     const rejected = shifts.filter((s) => approvalOf(s) === "rejected");
     const live = p.location && p.locationAt && Date.now() - p.locationAt < 12 * 3600e3;
@@ -1443,7 +1447,7 @@ ${docCss()}
           <h1 class="me-name">${esc(p.name)}</h1>
           <div class="comp-role"><span class="tag ${p.role === "technician" ? "technician" : "model"}">${roleLabel(p.role)}</span>${p.speciality ? `<span>${esc(p.speciality)}</span>` : ""}<span class="mono">${money(p.rate)} / h</span></div>
         </div>
-        <div class="view-actions"><a class="btn" href="#team">${ICON.pin}Team</a></div>
+        <div class="view-actions"><a class="btn" href="#calendar">${CAL}Calendario</a><a class="btn" href="#team">${ICON.pin}Persone</a></div>
       </div>
       <div class="summary me-sum">
         <div><span class="eyebrow">Ti è dovuto</span><span class="big ${b.owed > 0.004 ? "" : "zero"}">${money(b.owed)}</span>
@@ -1467,6 +1471,10 @@ ${docCss()}
         <section class="panel me-list">
           <div class="me-list-head"><h2>Ricevute recenti</h2><button class="btn quiet sm" type="button" data-act="my-receipts" data-id="${p.id}">Tutte le mie ricevute</button></div>
           ${recs.length ? `<ul class="rows">${recs.slice(0, 6).map(recRow).join("")}</ul>` : `<p>Nessuna ricevuta. Fotografane una quando paghi qualcosa per un lavoro.</p>`}
+        </section>
+        <section class="panel me-list">
+          <div class="me-list-head"><h2>Pagamenti ricevuti</h2><button class="btn quiet sm" type="button" data-act="statement" data-id="${p.id}">Estratto conto</button></div>
+          ${pays.length ? `<ul class="rows">${pays.slice(0, 6).map((x) => `<li><div class="r"><span class="r-main"><span class="r-title">${fmtShort(x.date)}</span><span class="r-sub">${esc(methodLabel(x.method))}${x.note ? ` · ${esc(x.note)}` : ""}</span></span><span class="r-end"><span class="mono">${money((Number(x.amount) || 0) + (Number(x.receiptsAmount) || 0))}</span></span></div></li>`).join("")}</ul>` : `<p>Ancora nessun pagamento.</p>`}
         </section>
       </div>`;
   }
@@ -1495,7 +1503,7 @@ ${docCss()}
           <div class="q-main">
             <div class="q-top"><b>${esc(personName(s.personId))}</b><span class="mono">${hrs(s.hours)}</span></div>
             <div class="q-sub">${[fmtShort(s.date), s.start && s.end ? `${esc(s.start)}–${esc(s.end)}` : "", esc(s.job || ""), esc(s.location || "")].filter(Boolean).join(" · ")}</div>
-            <div class="q-by">${by ? `Registrate da ${esc(by)}` : "Registrate dallo staff"} · ${ago(s.updatedAt || s.createdAt)} ${unsyncedTag("shifts", s.id)}</div>
+            <div class="q-by">${by ? `Registrate da ${esc(by)}` : "Registrate dai collaboratori"} · ${ago(s.updatedAt || s.createdAt)} ${unsyncedTag("shifts", s.id)}</div>
           </div>
           <div class="q-acts">
             <button class="btn sm quiet" type="button" data-act="edit-shift" data-id="${s.id}">Modifica</button>
@@ -1571,7 +1579,7 @@ ${docCss()}
     const list = state.places.slice().sort(byName);
     return `<section class="panel">
       <h2>Luoghi salvati</h2>
-      <p>Studi e location dove il team va spesso. Compaiono come pulsanti rapidi quando qualcuno segnala la propria posizione.</p>
+      <p>Studi e luoghi dove la squadra va spesso. Compaiono come pulsanti rapidi quando qualcuno segnala la propria posizione.</p>
       ${list.length ? `<div class="chips">${list.map((pl) => `<span class="chip static">${ICON.pin}<span>${esc(pl.name)}</span><button type="button" class="chip-x" data-act="place-del" data-id="${pl.id}" aria-label="Rimuovi ${esc(pl.name)}">Rimuovi</button></span>`).join("")}</div>` : ""}
       <form class="inline-add" id="place-form" novalidate>
         <input class="input" id="place-name" maxlength="120" autocomplete="off" placeholder="Piazza Duomo 20, Milano" aria-label="Nuovo luogo" value="${esc(ui.placeDraft || "")}">
@@ -1629,11 +1637,11 @@ ${docCss()}
       "payment.add": `ha registrato un pagamento di ${M} a ${P}`,
       "payment.edit": `ha modificato un pagamento di ${M} a ${P}`,
       "payment.delete": `ha eliminato un pagamento di ${M} a ${P}`,
-      "person.add": `ha aggiunto ${P} al team`,
+      "person.add": `ha aggiunto ${P} alla squadra`,
       "person.edit": `ha aggiornato i dati di ${P}`,
       "person.rate": `ha impostato la tariffa di ${P} a <span class="mono">${money(i.rate)}</span> / h`,
       "person.checkin": i.location ? (self ? `ha segnalato la propria posizione: ${esc(i.location)}` : `ha segnalato ${X} a ${esc(i.location)}`) : `ha cancellato ${self ? "la propria posizione" : `la posizione di ${X}`}`,
-      "person.delete": `ha rimosso ${P} dal team`,
+      "person.delete": `ha rimosso ${P} dalla squadra`,
       "settings.edit": `ha impostato la valuta su ${esc(i.currency || "")}`,
       "place.add": `ha salvato il luogo ${esc(i.name || "")}`,
       "place.edit": `ha rinominato un luogo salvato in ${esc(i.name || "")}`,
@@ -1774,7 +1782,7 @@ ${docCss()}
   }
 
   function renderJobsHook() {
-    if (ui.tab === "jobs") renderJobs();
+    if (ui.tab === "calendar") renderCalendar();
     if ($("#d-job").open && jobOpenId) renderJob(jobOpenId);
   }
 
@@ -1789,7 +1797,7 @@ ${docCss()}
     $$("#job-seg button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.jv === jui.view)));
     if (!state.jobs.length) {
       el.innerHTML = isAdmin()
-        ? empty("Ancora nessun lavoro prenotato", "Aggiungi un lavoro con cliente, data, orario di convocazione e posizione, poi prenota le persone. Compare sulla loro scheda nel team e le ore si possono registrare direttamente da lì.", "job-add", "Prenota il primo lavoro")
+        ? empty("Ancora nessun lavoro prenotato", "Aggiungi un lavoro con cliente, data, orario di convocazione e posizione, poi prenota le persone. Compare sulla loro scheda in Persone e nel calendario e le ore si possono registrare direttamente da lì.", "job-add", "Prenota il primo lavoro")
         : empty("Ancora nessun lavoro prenotato", "I lavori compaiono qui quando un amministratore li prenota.");
       return;
     }
@@ -1907,10 +1915,10 @@ ${docCss()}
   }
 
   // Job form (admins)
-  function openJob(id) {
+  function openJob(id, day) {
     if (!isAdmin()) return;
     editingJob = id || null;
-    const j = state.jobs.find((x) => x.id === id) || {};
+    const j = state.jobs.find((x) => x.id === id) || (day ? { date: day } : {});
     $("#jf-title").textContent = id ? "Modifica lavoro" : "Nuovo lavoro";
     $("#jf-client").value = j.client || ""; $("#jf-name").value = j.title || "";
     $("#jf-date").value = j.date || isoDay(); $("#jf-end").value = j.endDate || ""; $("#jf-call").value = j.call || "";
@@ -1919,6 +1927,7 @@ ${docCss()}
     const amt = j.billing === "hourly" ? j.clientRate : j.fee;
     $("#jf-amount").value = amt ? amt : "";
     $("#jf-inv").value = invOf(j);
+    $("#jf-more").open = !!amt || invOf(j) !== "not invoiced";
     $("#jf-clients").innerHTML = [...new Set(state.jobs.map((x) => (x.client || "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, locale)).map((c) => `<option value="${esc(c)}"></option>`).join("");
     pickPeople(new Set(j.people || []));
     billingLabel();
@@ -1933,7 +1942,7 @@ ${docCss()}
     $("#jf-people").innerHTML = people.length ? people.map((p) => {
       const clash = date && state.jobs.find((o) => o.id !== editingJob && (o.people || []).includes(p.id) && o.date <= end && date <= jobEnd(o));
       return `<label class="pickp"><input type="checkbox" value="${p.id}" ${sel.has(p.id) ? "checked" : ""}><span class="nm">${esc(p.name)}</span><span class="rl ${clash ? "clash" : ""}">${clash ? `Già su ${esc(jobName(clash))}` : roleLabel(p.role)}</span></label>`;
-    }).join("") : `<p class="hint">Prima aggiungi le persone al team, poi prenotale qui.</p>`;
+    }).join("") : `<p class="hint">Prima aggiungi le persone alla squadra, poi prenotale qui.</p>`;
   }
   function billingLabel() { $("#jf-amount-lbl").textContent = $("#jf-billing").value === "hourly" ? "Tariffa oraria al cliente" : "Compenso dal cliente"; }
   $("#jf-billing").addEventListener("change", billingLabel);
@@ -2024,6 +2033,8 @@ ${docCss()}
     switch (t.dataset.act) {
       case "job-open": jobOpenId = id; renderJob(id); return openSheet("#d-job");
       case "job-add": return openJob();
+      case "cal-day": cui.sel = t.dataset.day; renderCalendar(); if (cui.view === "week" && matchMedia("(max-width: 820px)").matches) $(".cal-agenda")?.scrollIntoView({ behavior: "smooth", block: "start" }); return;
+      case "cal-book": return openJob(null, t.dataset.day);
       case "job-edit": return openJob(id);
       case "job-log": shiftFromJob = { jobId: id }; openShift(t.dataset.person); shiftFromJob = null; return;
       case "job-export": return exportJobs();
@@ -2039,12 +2050,191 @@ ${docCss()}
   $("#job-q").addEventListener("input", (e) => { jui.q = e.target.value; render(); });
   document.addEventListener("toggle", (e) => { if (e.target.classList?.contains("jpast")) jui.pastOpen = e.target.open; }, true);
 
+  // ---------- Calendar ----------
+  // Where everyone is, day by day, from three sources: jobs they're booked on (planned),
+  // hours they logged (worked) and locations they reported (check-ins, fetched from the
+  // server's history; the latest one is also on the person). Staff see only themselves.
+  const cui = { view: "week", anchor: isoDay(), sel: isoDay(), role: "" };
+  const checkins = { key: "", list: [], at: 0, busy: false };
+  const parseDay = (iso) => { const [y, m, d] = iso.split("-").map(Number); return new Date(y, m - 1, d); };
+  const mondayOf = (iso) => { const d = parseDay(iso); return addDays(iso, -((d.getDay() + 6) % 7)); };
+  function calRange() {
+    if (cui.view === "month") {
+      const first = cui.anchor.slice(0, 7) + "-01", start = mondayOf(first);
+      const d = parseDay(first), last = isoDay(new Date(d.getFullYear(), d.getMonth() + 1, 0));
+      const end = addDays(mondayOf(last), 6);
+      return { start, end, first, last };
+    }
+    const start = mondayOf(cui.anchor);
+    return { start, end: addDays(start, 6) };
+  }
+  const daysOf = (start, end) => { const out = []; for (let d = start; d <= end; d = addDays(d, 1)) out.push(d); return out; };
+  const calPeople = () => state.people
+    .filter((p) => (isAdmin() ? !cui.role || (p.role || "model") === cui.role : p.id === me?.personId))
+    .sort(byName);
+
+  async function loadCheckins(force) {
+    const { start, end } = calRange(), key = start + "_" + end;
+    if (checkins.busy || (!force && checkins.key === key && Date.now() - checkins.at < 60e3)) return;
+    if (!isAdmin() && !me?.personId) return;
+    checkins.busy = true;
+    try {
+      const from = parseDay(start).getTime(), to = parseDay(addDays(end, 1)).getTime();
+      const r = await api(`/api/checkins?from=${from}&to=${to}`, { method: "GET" });
+      Object.assign(checkins, { key, list: r.checkins || [], at: Date.now() });
+      if (ui.tab === "calendar") renderCalendar();
+    } catch { /* offline: the calendar shows bookings, hours and latest positions */ }
+    finally { checkins.busy = false; }
+  }
+
+  // day -> personId -> entries, each { kind: "job" | "shift" | "here", loc, … }
+  function calEntries(start, end, people) {
+    const ids = new Set(people.map((p) => p.id)), out = new Map();
+    const add = (day, pid, e) => {
+      if (day < start || day > end || !ids.has(pid)) return;
+      if (!out.has(day)) out.set(day, new Map());
+      const m = out.get(day); if (!m.has(pid)) m.set(pid, []);
+      m.get(pid).push(e);
+    };
+    for (const j of state.jobs) {
+      if (!j.date || jobEnd(j) < start || j.date > end) continue;
+      for (const d of daysOf(j.date < start ? start : j.date, jobEnd(j) > end ? end : jobEnd(j)))
+        for (const pid of crewOf(j)) add(d, pid, { kind: "job", loc: j.location || "", title: jobName(j), call: j.call || "", jobId: j.id });
+    }
+    for (const s of state.shifts) {
+      if (!s.date) continue;
+      const j = s.jobId && state.jobs.find((x) => x.id === s.jobId);
+      add(s.date, s.personId, { kind: "shift", loc: s.location || j?.location || "", title: s.job || (j ? jobName(j) : ""), hours: s.hours, start: s.start, end: s.end, pending: approvalOf(s) === "pending" });
+    }
+    const seen = new Set();
+    for (const c of checkins.list) {
+      const k = c.personId + "@" + c.at; seen.add(k);
+      add(isoDay(new Date(c.at)), c.personId, { kind: "here", loc: c.location, at: c.at });
+    }
+    for (const p of people) if (p.location && p.locationAt && !seen.has(p.id + "@" + p.locationAt) && !checkins.list.some((c) => c.personId === p.id && Math.abs(c.at - p.locationAt) < 5e3))
+      add(isoDay(new Date(p.locationAt)), p.id, { kind: "here", loc: p.location, at: p.locationAt });
+    // Within a day: bookings first, then hours, then check-ins by time.
+    const rank = { job: 0, shift: 1, here: 2 };
+    for (const m of out.values()) for (const list of m.values()) list.sort((a, b) => rank[a.kind] - rank[b.kind] || (a.at || 0) - (b.at || 0));
+    return out;
+  }
+  // The one place to show for a person on a day: the last reported position, else where they logged hours, else the booking.
+  const mainPlace = (list) => [...list].reverse().find((e) => e.kind === "here" && e.loc)?.loc || list.find((e) => e.kind === "shift" && e.loc)?.loc || list.find((e) => e.loc)?.loc || list[0]?.title || "";
+  const KIND = { job: "Prenotato", shift: "Ore registrate", here: "Posizione segnalata" };
+  const kindIcon = (k) => (k === "job" ? CAL : k === "shift" ? ICON.clock : ICON.pin);
+  const kindDots = (list) => [...new Set(list.map((e) => e.kind))].map((k) => `<i class="kd k-${k}" title="${KIND[k]}"></i>`).join("");
+  const dayLong = (iso) => parseDay(iso).toLocaleDateString(locale, { weekday: "long", day: "numeric", month: "long" });
+  const hm = (ms) => new Date(ms).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
+
+  function calTitle() {
+    const { start, end } = calRange();
+    if (cui.view === "month") return parseDay(cui.anchor).toLocaleDateString(locale, { month: "long", year: "numeric" });
+    const a = parseDay(start), b = parseDay(end);
+    const sameMonth = a.getMonth() === b.getMonth();
+    return `${a.toLocaleDateString(locale, sameMonth ? { day: "numeric" } : { day: "numeric", month: "short" })} – ${b.toLocaleDateString(locale, { day: "numeric", month: sameMonth ? "long" : "short", year: "numeric" })}`;
+  }
+
+  function renderCalendar() {
+    const sec = $('[data-view="calendar"]');
+    sec.dataset.cv = cui.view;
+    $$("#cal-seg button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.cv === cui.view)));
+    $("#cal-role").value = cui.role;
+    if (cui.view === "list") return renderJobs();
+    $("#cal-title").textContent = calTitle();
+    const el = $("#cal"), people = calPeople();
+    if (!state.people.length) {
+      el.innerHTML = isAdmin() ? empty("Ancora nessuno in squadra", "Aggiungi modelli e tecnici in Persone. Poi qui vedi dove sono, giorno per giorno.", "add-person", "Aggiungi persona")
+        : empty("Calendario vuoto", "Un amministratore deve prima aggiungere le persone.");
+      return;
+    }
+    if (!people.length) {
+      el.innerHTML = isAdmin() ? empty("Nessuno con questo filtro", "Scegli «Tutti» per vedere tutta la squadra.")
+        : empty("Il tuo accesso non è ancora collegato", "Chiedi a un amministratore di collegare il tuo accesso al tuo nome. Poi qui vedrai i tuoi lavori e dove sei stato.");
+      return;
+    }
+    const { start, end } = calRange(), ent = calEntries(start, end, people), today = isoDay();
+    if (cui.sel < start || cui.sel > end) cui.sel = today >= start && today <= end ? today : (cui.view === "month" ? calRange().first : start);
+    el.innerHTML = (cui.view === "month" ? monthGrid(start, end, ent, today) : weekGrid(start, end, ent, people, today))
+      + `<div class="cal-legend" aria-hidden="true"><span><i class="kd k-job"></i>Prenotato</span><span><i class="kd k-shift"></i>Ore registrate</span><span><i class="kd k-here"></i>Posizione segnalata</span></div>`
+      + dayAgenda(cui.sel, ent.get(cui.sel) || new Map(), people);
+    loadCheckins();
+  }
+
+  function weekGrid(start, end, ent, people, today) {
+    const days = daysOf(start, end);
+    const head = days.map((d) => { const dt = parseDay(d); return `<th scope="col" class="${d === today ? "today" : ""} ${d === cui.sel ? "sel" : ""}"><button type="button" data-act="cal-day" data-day="${d}"><span>${dt.toLocaleDateString(locale, { weekday: "short" })}</span><b>${dt.getDate()}</b></button></th>`; }).join("");
+    const rows = people.map((p) => `<tr><th scope="row"><button class="cal-who" type="button" data-act="detail" data-id="${p.id}"><b>${esc(p.name)}</b><span>${roleLabel(p.role)}</span></button></th>${days.map((d) => {
+      const list = ent.get(d)?.get(p.id) || [];
+      return `<td class="${d === today ? "today" : ""}">${list.length ? `<button class="cal-cell" type="button" data-act="cal-day" data-day="${d}" title="${esc(list.map((e) => `${KIND[e.kind]}: ${e.loc || e.title}`).join("\n"))}"><span class="pl">${esc(mainPlace(list))}</span><span class="kds">${kindDots(list)}</span></button>` : `<span class="cal-none" aria-label="Nessuna informazione">—</span>`}</td>`;
+    }).join("")}</tr>`).join("");
+    // Phones get the same week as a list of days.
+    const agenda = days.map((d) => {
+      const m = ent.get(d) || new Map();
+      const items = people.filter((p) => m.has(p.id)).map((p) => `<li><button type="button" data-act="cal-day" data-day="${d}"><b>${esc(p.name)}</b><span class="pl">${esc(mainPlace(m.get(p.id)))}</span><span class="kds">${kindDots(m.get(p.id))}</span></button></li>`).join("");
+      return `<section class="cal-wday ${d === today ? "today" : ""} ${items ? "" : "empty"}"><h3>${d === today ? "Oggi · " : ""}${esc(dayLong(d))}</h3>${items ? `<ul>${items}</ul>` : `<p>Niente</p>`}</section>`;
+    }).join("");
+    return `<div class="cal-week tablebox"><table><thead><tr><th scope="col" class="corner"><span class="sr">Persona</span></th>${head}</tr></thead><tbody>${rows}</tbody></table></div><div class="cal-weeklist">${agenda}</div>`;
+  }
+
+  function monthGrid(start, end, ent, today) {
+    const { first, last } = calRange();
+    const wd = daysOf(start, addDays(start, 6)).map((d) => `<div class="cal-wd">${parseDay(d).toLocaleDateString(locale, { weekday: "short" })}</div>`).join("");
+    const cells = daysOf(start, end).map((d) => {
+      const m = ent.get(d) || new Map(), n = m.size, out = d < first || d > last;
+      const lines = [...m.entries()].sort((a, b) => personName(a[0]).localeCompare(personName(b[0]), locale)).slice(0, 3)
+        .map(([pid, list]) => `<span class="ml"><i class="kd k-${list[list.length - 1].kind}"></i><b>${esc(isAdmin() ? personName(pid).split(" ")[0] : mainPlace(list))}</b>${isAdmin() ? ` ${esc(mainPlace(list))}` : ""}</span>`).join("");
+      return `<button type="button" class="cal-mday ${out ? "out" : ""} ${d === today ? "today" : ""} ${d === cui.sel ? "sel" : ""}" data-act="cal-day" data-day="${d}" aria-label="${esc(dayLong(d))}${n ? `, ${n} ${n === 1 ? "persona" : "persone"}` : ""}">
+        <span class="dn">${parseDay(d).getDate()}</span>${lines}${n > 3 ? `<span class="more">+${n - 3}</span>` : ""}${n ? `<span class="cnt">${n}</span>` : ""}</button>`;
+    }).join("");
+    return `<div class="cal-month"><div class="cal-mhead">${wd}</div><div class="cal-mgrid">${cells}</div></div>`;
+  }
+
+  function dayAgenda(day, m, people) {
+    const withInfo = people.filter((p) => m.has(p.id)), without = people.filter((p) => !m.has(p.id));
+    const line = (e) => {
+      let txt;
+      if (e.kind === "job") txt = `<b>${esc(e.title)}</b>${e.loc ? ` · ${esc(e.loc)}` : ""}${e.call ? ` · convocazione ${esc(e.call)}` : ""}`;
+      else if (e.kind === "shift") txt = `<b>${hrs(e.hours)}</b>${e.start && e.end ? ` ${esc(e.start)}–${esc(e.end)}` : ""}${e.title ? ` · ${esc(e.title)}` : ""}${e.loc ? ` · ${esc(e.loc)}` : ""}${e.pending ? ` <span class="pill wait">In attesa</span>` : ""}`;
+      else txt = `<b>${esc(e.loc)}</b> · alle ${hm(e.at)}`;
+      const tag = e.kind === "job" ? `button type="button" data-act="job-open" data-id="${e.jobId}"` : "div";
+      return `<li class="k-${e.kind}"><${tag} class="ag-line">${kindIcon(e.kind)}<span><span class="ag-k">${KIND[e.kind]}</span>${txt}</span></${tag.split(" ")[0]}></li>`;
+    };
+    return `<section class="panel cal-agenda" aria-label="${esc(dayLong(day))}">
+      <div class="ag-head"><h2>${day === isoDay() ? "Oggi · " : ""}${esc(dayLong(day))}</h2>${isAdmin() ? `<button class="btn sm" type="button" data-act="cal-book" data-day="${day}">${ICON.plus || "+"} Prenota un lavoro</button>` : ""}</div>
+      ${withInfo.length ? `<ul class="ag-people">${withInfo.map((p) => `<li><div class="ag-who"><button class="comp-name" type="button" data-act="detail" data-id="${p.id}">${esc(p.name)}</button><span class="tag ${p.role === "technician" ? "technician" : "model"}">${roleLabel(p.role)}</span></div><ul class="ag-lines">${m.get(p.id).map(line).join("")}</ul></li>`).join("")}</ul>`
+        : `<p class="muted">${isAdmin() ? "Nessuno è prenotato o ha segnalato una posizione in questo giorno." : "Niente in questo giorno."}</p>`}
+      ${isAdmin() && withInfo.length && without.length ? `<p class="ag-none"><span class="eyebrow">Senza informazioni</span> ${without.map((p) => esc(p.name)).join(", ")}</p>` : ""}
+    </section>`;
+  }
+
+  $("#cal-seg").addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    cui.view = b.dataset.cv;
+    if (location.hash !== "#calendar") history.replaceState(null, "", "#calendar");
+    renderCalendar();
+  });
+  $('[data-view="calendar"] .cal-nav').addEventListener("click", (e) => {
+    const b = e.target.closest("[data-cal]"); if (!b) return;
+    if (b.dataset.cal === "today") { cui.anchor = cui.sel = isoDay(); }
+    else {
+      const dir = b.dataset.cal === "next" ? 1 : -1;
+      if (cui.view === "month") { const d = parseDay(cui.anchor); cui.anchor = isoDay(new Date(d.getFullYear(), d.getMonth() + dir, 1)); }
+      else cui.anchor = addDays(cui.anchor, 7 * dir);
+      cui.sel = "";
+    }
+    renderCalendar();
+  });
+  $("#cal-role").addEventListener("change", (e) => { cui.role = e.target.value; renderCalendar(); });
+
   // ---------- Routing ----------
-  const TABS = ["team", "jobs", "hours", "receipts", "payments", "settings", "me"];
+  const TABS = ["calendar", "team", "hours", "receipts", "payments", "settings", "me"];
   function route() {
-    const h = location.hash.slice(1);
-    ui.tab = TABS.includes(h) ? h : staffMe() ? "me" : "team"; // linked staff land on their own page
-    $$(".nav a").forEach((a) => (a.dataset.tab === ui.tab || (a.dataset.tab === "team" && ui.tab === "me") ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current")));
+    let h = location.hash.slice(1);
+    if (h === "jobs") { cui.view = "list"; h = "calendar"; history.replaceState(null, "", "#calendar"); }
+    if (h === "payments" && !isAdmin()) h = ""; // staff see their payments on their own page
+    // Office lands on the calendar, linked staff on their own page.
+    ui.tab = TABS.includes(h) ? h : isAdmin() ? "calendar" : staffMe() ? "me" : "team";
+    $$(".nav a, .gear").forEach((a) => (a.dataset.tab === ui.tab || (a.dataset.tab === "team" && ui.tab === "me") ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current")));
     $$("[data-view]").forEach((v) => (v.hidden = v.dataset.view !== ui.tab));
     if (ui.tab === "settings") { act.loaded = false; loadAccounts(); }
     render();
@@ -2067,7 +2257,7 @@ ${docCss()}
     me = user; await meta.set("me", user);
     sync.authLost = false;
     $("#auth").hidden = true; $("#app").hidden = false;
-    $("#me-chip").innerHTML = `<div><b>${esc(user.name)}</b>${user.role === "admin" ? "Amministratore" : "Staff"}</div>`;
+    $("#me-chip").innerHTML = `<div><b>${esc(user.name)}</b>${user.role === "admin" ? "Amministratore" : "Collaboratore"}</div>`;
     navigator.storage?.persist?.().catch(() => {});
     loadAccounts();
     route();
@@ -2128,7 +2318,7 @@ ${docCss()}
       $("#li-sub").textContent = "Per gli amministratori dell'agenzia: persone, tariffe, lavori e pagamenti.";
       if (site.clientUrl) { other.hidden = false; other.innerHTML = `Modello/a o tecnico? Accedi su <a href="${esc(site.clientUrl)}">${esc(host(site.clientUrl))}</a>`; }
     } else if (site.site === "client") {
-      $("#auth-site").textContent = "Team";
+      $("#auth-site").textContent = "Squadra";
       if (site.adminUrl) { other.hidden = false; other.innerHTML = `Amministratore dell'agenzia? Usa <a href="${esc(site.adminUrl)}">${esc(host(site.adminUrl))}</a>`; }
     }
     $("#su-code-wrap").hidden = !site.setupCode;
@@ -2155,7 +2345,7 @@ ${docCss()}
     } catch {
       // Offline (or server unreachable): open with what's on this device.
       if (cached) { sync.online = false; me = cached; $("#auth").hidden = true; $("#app").hidden = false;
-        $("#me-chip").innerHTML = `<div><b>${esc(cached.name)}</b>${cached.role === "admin" ? "Amministratore" : "Staff"}</div>`;
+        $("#me-chip").innerHTML = `<div><b>${esc(cached.name)}</b>${cached.role === "admin" ? "Amministratore" : "Collaboratore"}</div>`;
         route(); return; }
       showAuth("login");
       showErr($("#li-err"), "Nessuna connessione. Accedi una volta mentre sei online, poi l'app funziona anche offline.");

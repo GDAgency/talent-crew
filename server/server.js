@@ -522,7 +522,7 @@ function serveManifest(req, res, site) {
   fs.readFile(path.join(PUBLIC_DIR, "manifest.webmanifest"), "utf8", (err, text) => {
     if (err) return fail(res, 404, "Non trovato");
     const m = JSON.parse(text);
-    if (site === "admin") { m.name = `${m.name} · Ufficio`; m.short_name = "T&C Ufficio"; }
+    if (site === "admin") { m.name = `${m.name} · Ufficio`; m.short_name = "Lumia Ufficio"; }
     send(res, 200, Buffer.from(JSON.stringify(m)), { "Content-Type": "application/manifest+json", "Cache-Control": "no-cache" });
   });
 }

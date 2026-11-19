@@ -462,10 +462,23 @@
       if (ui[key] && !people.some((p) => p.id === ui[key])) ui[key] = "";
       el.value = ui[key];
     }
-    $("#h-month").value = ui.hMonth;
+    fillMonths($("#h-month"), ui.hMonth, true);
     const cat = $("#r-cat");
     if (!cat.options.length) cat.innerHTML = `<option value="">Tutte le categorie</option>` + CATS.map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join("");
     cat.value = ui.rCat;
+  }
+
+  // Month choice in Italian whatever the browser's language: from the earliest record to three months ahead.
+  function fillMonths(el, value, withAll) {
+    const dates = [...state.shifts, ...state.receipts, ...state.payments, ...state.jobs].map((x) => (x.date || "").slice(0, 7)).filter((m) => /^\d{4}-\d{2}$/.test(m));
+    const now = new Date(), last = isoMonth(new Date(now.getFullYear(), now.getMonth() + 3, 1));
+    let first = [isoMonth(new Date(now.getFullYear(), now.getMonth() - 12, 1)), value || last, ...dates].sort()[0];
+    const opts = [];
+    for (let [y, m] = first.split("-").map(Number); ; m++) { if (m > 12) { m = 1; y++; } const k = `${y}-${pad(m)}`; if (k > last && k > (value || "")) break; opts.push(k); if (opts.length > 240) break; }
+    const label = (k) => { const t = new Date(k + "-01T12:00").toLocaleDateString(locale, { month: "long", year: "numeric" }); return t[0].toUpperCase() + t.slice(1); };
+    const html = (withAll ? `<option value="">Tutti i mesi</option>` : "") + opts.reverse().map((k) => `<option value="${k}">${label(k)}</option>`).join("");
+    if (el.dataset.sig !== html) { el.innerHTML = html; el.dataset.sig = html; }
+    el.value = value || "";
   }
 
   const shiftsShown = () => state.shifts
@@ -625,7 +638,7 @@
       </section>
       <section class="panel">
         <h2>Estratti conto</h2>
-        <div class="field"><label for="agency">Nome dell'agenzia</label><input id="agency" maxlength="80" autocomplete="organization" placeholder="Talent &amp; Crew" value="${esc(state.settings.agencyName || "")}"><span class="hint">Stampato in cima a ogni estratto conto.</span></div>
+        <div class="field"><label for="agency">Nome dell'agenzia</label><input id="agency" maxlength="80" autocomplete="organization" placeholder="Lumia" value="${esc(state.settings.agencyName || "")}"><span class="hint">Stampato in cima a ogni estratto conto.</span></div>
         <div class="field"><label for="agency-addr">Indirizzo dell'agenzia</label><input id="agency-addr" maxlength="160" autocomplete="street-address" placeholder="${esc(AGENCY_ADDRESS)}" value="${esc(agencyAddress())}"><span class="hint">Sotto il nome, negli estratti conto.</span></div>
       </section>
       <section class="panel wide">
@@ -1134,7 +1147,7 @@
   // A statement is a running account for one person over a period:
   // opening balance + work + receipts added − wages paid − receipts paid back = closing balance.
   // Over all time it equals the board's "owed" figure (earned − wages + receipts not yet reimbursed).
-  const agencyName = () => String(state.settings.agencyName || "").trim() || "Talent & Crew";
+  const agencyName = () => String(state.settings.agencyName || "").trim() || "Lumia";
   const AGENCY_ADDRESS = "Piazza Duomo 20, Milano";
   const agencyAddress = () => (state.settings.agencyAddress ?? AGENCY_ADDRESS).trim();
   const byDateAsc = (a, b) => (a.date || "").localeCompare(b.date || "") || (a.createdAt || 0) - (b.createdAt || 0);
@@ -1305,7 +1318,7 @@ ${docCss()}
   function openStatement(pid) {
     if (needPeople()) return;
     personOptions($("#st-person"), pid || $("#st-person").value || ui.pPerson || state.people.slice().sort(byName)[0]?.id);
-    $("#st-month").value = stUI.month;
+    fillMonths($("#st-month"), stUI.month);
     if (!stUI.from) { stUI.from = isoMonth() + "-01"; stUI.to = isoDay(); }
     $("#st-from").value = stUI.from; $("#st-to").value = stUI.to;
     renderStatement();
@@ -1887,7 +1900,7 @@ ${docCss()}
       <dl class="kv">
         <dt>Cliente</dt><dd>${esc(j.client || "—")}</dd>
         <dt>Quando</dt><dd>${jobRange(j)}${jobOn(j, isoDay()) ? ` <span class="pill inv">Oggi</span>` : ""}</dd>
-        <dt>Convocazione</dt><dd class="mono">${esc(j.call || "—")}</dd>
+        <dt>Orario</dt><dd class="mono">${j.call ? esc(j.call) + (j.wrap ? "–" + esc(j.wrap) : "") : "—"}</dd>
         <dt>Posizione</dt><dd>${esc(j.location || "—")}</dd>
         ${j.notes ? `<dt>Note</dt><dd class="pre">${esc(j.notes)}</dd>` : ""}
       </dl>
@@ -1915,13 +1928,13 @@ ${docCss()}
   }
 
   // Job form (admins)
-  function openJob(id, day) {
+  function openJob(id, day, call, pid) {
     if (!isAdmin()) return;
     editingJob = id || null;
-    const j = state.jobs.find((x) => x.id === id) || (day ? { date: day } : {});
+    const j = state.jobs.find((x) => x.id === id) || (day ? { date: day, call: call || "", wrap: call ? fmtMin(Math.min(1439, toMin(call) + 480)) : "", people: pid ? [pid] : [] } : {});
     $("#jf-title").textContent = id ? "Modifica lavoro" : "Nuovo lavoro";
     $("#jf-client").value = j.client || ""; $("#jf-name").value = j.title || "";
-    $("#jf-date").value = j.date || isoDay(); $("#jf-end").value = j.endDate || ""; $("#jf-call").value = j.call || "";
+    $("#jf-date").value = j.date || isoDay(); $("#jf-end").value = j.endDate || ""; $("#jf-call").value = j.call || ""; $("#jf-wrap").value = j.wrap || "";
     $("#jf-loc").value = j.location || ""; $("#jf-notes").value = j.notes || "";
     $("#jf-billing").value = j.billing === "hourly" ? "hourly" : "flat";
     const amt = j.billing === "hourly" ? j.clientRate : j.fee;
@@ -1961,7 +1974,7 @@ ${docCss()}
       const prev = state.jobs.find((x) => x.id === editingJob);
       const billing = $("#jf-billing").value === "hourly" ? "hourly" : "flat";
       const rec = await save("jobs", {
-        ...(prev || {}), client, title, date, endDate: end > date ? end : "", call: $("#jf-call").value, location: $("#jf-loc").value.trim(),
+        ...(prev || {}), client, title, date, endDate: end > date ? end : "", call: $("#jf-call").value, wrap: $("#jf-wrap").value, location: $("#jf-loc").value.trim(),
         notes: $("#jf-notes").value.trim(), people: [...pickedPeople()], billing,
         fee: billing === "flat" ? round2(amt) : Number(prev?.fee) || 0, clientRate: billing === "hourly" ? round2(amt) : Number(prev?.clientRate) || 0,
         invoiceStatus: $("#jf-inv").value,
@@ -2033,7 +2046,8 @@ ${docCss()}
     switch (t.dataset.act) {
       case "job-open": jobOpenId = id; renderJob(id); return openSheet("#d-job");
       case "job-add": return openJob();
-      case "cal-day": cui.sel = t.dataset.day; renderCalendar(); if (cui.view === "week" && matchMedia("(max-width: 820px)").matches) $(".cal-agenda")?.scrollIntoView({ behavior: "smooth", block: "start" }); return;
+      case "cal-day": cui.sel = t.dataset.day; renderCalendar(); return;
+      case "cal-goto": cui.view = "day"; cui.anchor = cui.sel = t.dataset.day; renderCalendar(); window.scrollTo(0, 0); return;
       case "cal-book": return openJob(null, t.dataset.day);
       case "job-edit": return openJob(id);
       case "job-log": shiftFromJob = { jobId: id }; openShift(t.dataset.person); shiftFromJob = null; return;
@@ -2054,7 +2068,7 @@ ${docCss()}
   // Where everyone is, day by day, from three sources: jobs they're booked on (planned),
   // hours they logged (worked) and locations they reported (check-ins, fetched from the
   // server's history; the latest one is also on the person). Staff see only themselves.
-  const cui = { view: "week", anchor: isoDay(), sel: isoDay(), role: "" };
+  const cui = { view: matchMedia("(max-width: 820px)").matches ? "day" : "week", anchor: isoDay(), sel: isoDay(), role: "" };
   const checkins = { key: "", list: [], at: 0, busy: false };
   const parseDay = (iso) => { const [y, m, d] = iso.split("-").map(Number); return new Date(y, m - 1, d); };
   const mondayOf = (iso) => { const d = parseDay(iso); return addDays(iso, -((d.getDay() + 6) % 7)); };
@@ -2065,6 +2079,7 @@ ${docCss()}
       const end = addDays(mondayOf(last), 6);
       return { start, end, first, last };
     }
+    if (cui.view === "day") return { start: cui.anchor, end: cui.anchor };
     const start = mondayOf(cui.anchor);
     return { start, end: addDays(start, 6) };
   }
@@ -2129,6 +2144,7 @@ ${docCss()}
   function calTitle() {
     const { start, end } = calRange();
     if (cui.view === "month") return parseDay(cui.anchor).toLocaleDateString(locale, { month: "long", year: "numeric" });
+    if (cui.view === "day") return (start === isoDay() ? "Oggi · " : "") + parseDay(start).toLocaleDateString(locale, { weekday: "long", day: "numeric", month: "long", year: "numeric" });
     const a = parseDay(start), b = parseDay(end);
     const sameMonth = a.getMonth() === b.getMonth();
     return `${a.toLocaleDateString(locale, sameMonth ? { day: "numeric" } : { day: "numeric", month: "short" })} – ${b.toLocaleDateString(locale, { day: "numeric", month: sameMonth ? "long" : "short", year: "numeric" })}`;
@@ -2152,28 +2168,151 @@ ${docCss()}
         : empty("Il tuo accesso non è ancora collegato", "Chiedi a un amministratore di collegare il tuo accesso al tuo nome. Poi qui vedrai i tuoi lavori e dove sei stato.");
       return;
     }
-    const { start, end } = calRange(), ent = calEntries(start, end, people), today = isoDay();
-    if (cui.sel < start || cui.sel > end) cui.sel = today >= start && today <= end ? today : (cui.view === "month" ? calRange().first : start);
-    el.innerHTML = (cui.view === "month" ? monthGrid(start, end, ent, today) : weekGrid(start, end, ent, people, today))
-      + `<div class="cal-legend" aria-hidden="true"><span><i class="kd k-job"></i>Prenotato</span><span><i class="kd k-shift"></i>Ore registrate</span><span><i class="kd k-here"></i>Posizione segnalata</span></div>`
-      + dayAgenda(cui.sel, ent.get(cui.sel) || new Map(), people);
+    const { start, end } = calRange(), today = isoDay();
+    const legend = `<div class="cal-legend" aria-hidden="true"><span><i class="kd k-job"></i>Prenotato</span><span><i class="kd k-shift"></i>Ore registrate</span><span><i class="kd k-here"></i>Posizione segnalata</span>${isAdmin() && cui.view !== "month" ? `<span class="hint-add">Tocca un'ora libera per prenotare un lavoro</span>` : ""}</div>`;
+    if (cui.view === "month") {
+      const ent = calEntries(start, end, people);
+      if (cui.sel < start || cui.sel > end) cui.sel = today >= start && today <= end ? today : calRange().first;
+      el.innerHTML = monthGrid(start, end, ent, today) + legend + dayAgenda(cui.sel, ent.get(cui.sel) || new Map(), people);
+    } else {
+      cui.sel = cui.view === "day" ? start : cui.sel;
+      el.innerHTML = (cui.view === "day" ? dayGrid(start, people) : weekGrid(start, end, people)) + legend;
+      // Positions go on through the DOM: the page's security policy forbids style attributes in markup.
+      for (const n of el.querySelectorAll("[data-st]")) n.style.cssText = n.dataset.st;
+    }
     loadCheckins();
   }
 
-  function weekGrid(start, end, ent, people, today) {
-    const days = daysOf(start, end);
-    const head = days.map((d) => { const dt = parseDay(d); return `<th scope="col" class="${d === today ? "today" : ""} ${d === cui.sel ? "sel" : ""}"><button type="button" data-act="cal-day" data-day="${d}"><span>${dt.toLocaleDateString(locale, { weekday: "short" })}</span><b>${dt.getDate()}</b></button></th>`; }).join("");
-    const rows = people.map((p) => `<tr><th scope="row"><button class="cal-who" type="button" data-act="detail" data-id="${p.id}"><b>${esc(p.name)}</b><span>${roleLabel(p.role)}</span></button></th>${days.map((d) => {
-      const list = ent.get(d)?.get(p.id) || [];
-      return `<td class="${d === today ? "today" : ""}">${list.length ? `<button class="cal-cell" type="button" data-act="cal-day" data-day="${d}" title="${esc(list.map((e) => `${KIND[e.kind]}: ${e.loc || e.title}`).join("\n"))}"><span class="pl">${esc(mainPlace(list))}</span><span class="kds">${kindDots(list)}</span></button>` : `<span class="cal-none" aria-label="Nessuna informazione">—</span>`}</td>`;
-    }).join("")}</tr>`).join("");
-    // Phones get the same week as a list of days.
-    const agenda = days.map((d) => {
-      const m = ent.get(d) || new Map();
-      const items = people.filter((p) => m.has(p.id)).map((p) => `<li><button type="button" data-act="cal-day" data-day="${d}"><b>${esc(p.name)}</b><span class="pl">${esc(mainPlace(m.get(p.id)))}</span><span class="kds">${kindDots(m.get(p.id))}</span></button></li>`).join("");
-      return `<section class="cal-wday ${d === today ? "today" : ""} ${items ? "" : "empty"}"><h3>${d === today ? "Oggi · " : ""}${esc(dayLong(d))}</h3>${items ? `<ul>${items}</ul>` : `<p>Niente</p>`}</section>`;
-    }).join("");
-    return `<div class="cal-week tablebox"><table><thead><tr><th scope="col" class="corner"><span class="sr">Persona</span></th>${head}</tr></thead><tbody>${rows}</tbody></table></div><div class="cal-weeklist">${agenda}</div>`;
+  // ---------- Time grid (day and week views) ----------
+  // A real calendar: hours down the side, one column per person (day view) or per day
+  // (week view), and a block for every job and every stretch of logged hours.
+  const HOUR_PX = 48;
+  const toMin = (t) => { const m = /^(\d{1,2}):(\d{2})$/.exec(t || ""); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
+  const fmtMin = (n) => `${pad(Math.floor(n / 60) % 24)}:${pad(n % 60)}`;
+  const span = (s, e) => { if (e == null || e <= s) e = e != null && e < s ? 1440 : s + 60; return [s, Math.min(e, 1440)]; };
+  const jobSpan = (j, day) => {
+    const s = toMin(j.call); if (s == null) return null;
+    let e = toMin(j.wrap);
+    if (e == null) { // no end set: the latest logged end on that day, else a standard 8 hours
+      const ends = state.shifts.filter((x) => x.jobId === j.id && x.date === day).map((x) => toMin(x.end)).filter((v) => v != null && v > s);
+      e = ends.length ? Math.max(...ends) : s + 480;
+    }
+    return span(s, e);
+  };
+  const pinsOf = (day, ids) => {
+    const out = [], seen = new Set();
+    const add = (pid, at, loc) => { if (!ids.has(pid) || !loc || isoDay(new Date(at)) !== day) return; const k = pid + "@" + Math.round(at / 5e3); if (seen.has(k)) return; seen.add(k); const d = new Date(at); out.push({ pid, at, min: d.getHours() * 60 + d.getMinutes(), loc }); };
+    for (const c of checkins.list) add(c.personId, c.at, c.location);
+    for (const p of state.people) if (p.location && p.locationAt) add(p.id, p.locationAt, p.location);
+    return out.sort((a, b) => a.at - b.at);
+  };
+  // What one person does on one day. Hours they logged on a job replace the planned block.
+  function personDay(pid, day) {
+    const timed = [], allday = [], used = new Set();
+    for (const j of state.jobs) {
+      if (!jobOn(j, day) || !(j.people || []).includes(pid)) continue;
+      const mine = state.shifts.filter((s) => s.jobId === j.id && s.personId === pid && s.date === day);
+      mine.forEach((s) => used.add(s.id));
+      const clocked = mine.filter((s) => toMin(s.start) != null && toMin(s.end) != null);
+      const logged = mine.reduce((a, s) => a + (Number(s.hours) || 0), 0);
+      if (clocked.length) for (const s of clocked) { const [a, b] = span(toMin(s.start), toMin(s.end)); timed.push({ kind: "shift", s: a, e: b, title: jobName(j), sub: s.location || j.location || "", shiftId: s.id, jobId: j.id, pending: approvalOf(s) === "pending", note: hrs(s.hours) }); }
+      else { const sp = jobSpan(j, day), ev = { kind: "job", title: jobName(j), sub: j.location || "", jobId: j.id, note: logged ? `${hrs(logged)} registrate` : "" }; if (sp) timed.push({ ...ev, s: sp[0], e: sp[1] }); else allday.push(ev); }
+    }
+    for (const s of state.shifts) {
+      if (s.personId !== pid || s.date !== day || used.has(s.id)) continue;
+      const ev = { kind: "shift", title: s.job || "Ore registrate", sub: s.location || "", shiftId: s.id, pending: approvalOf(s) === "pending", note: hrs(s.hours) };
+      if (toMin(s.start) != null && toMin(s.end) != null) { const [a, b] = span(toMin(s.start), toMin(s.end)); timed.push({ ...ev, s: a, e: b }); } else allday.push(ev);
+    }
+    return { timed, allday };
+  }
+  // The whole agency on one day: one block per job (with who is on it), plus hours logged outside jobs.
+  function agencyDay(day, people) {
+    const ids = new Set(people.map((p) => p.id)), timed = [], allday = [];
+    const first = (id) => personName(id).split(" ")[0];
+    for (const j of state.jobs) {
+      if (!jobOn(j, day)) continue;
+      const crew = crewOf(j).filter((id) => ids.has(id));
+      if (!crew.length && (cui.role || crewOf(j).length)) continue;
+      const done = new Set(state.shifts.filter((s) => s.jobId === j.id && s.date === day).map((s) => s.personId)).size;
+      const ev = { kind: "job", title: jobName(j), sub: j.location || "", jobId: j.id, who: crew.length ? crew.map(first).join(", ") : "Nessuno prenotato", note: done ? `ore registrate ${done}/${crew.length}` : "" };
+      const sp = jobSpan(j, day); if (sp) timed.push({ ...ev, s: sp[0], e: sp[1] }); else allday.push(ev);
+    }
+    for (const s of state.shifts) {
+      if (s.date !== day || !ids.has(s.personId)) continue;
+      const j = s.jobId && state.jobs.find((x) => x.id === s.jobId);
+      if (j && jobOn(j, day) && (j.people || []).includes(s.personId)) continue; // already inside the job block
+      const ev = { kind: "shift", title: first(s.personId), sub: [s.job, s.location].filter(Boolean).join(" · "), shiftId: s.id, pending: approvalOf(s) === "pending", note: hrs(s.hours) };
+      if (toMin(s.start) != null && toMin(s.end) != null) { const [a, b] = span(toMin(s.start), toMin(s.end)); timed.push({ ...ev, s: a, e: b }); } else allday.push(ev);
+    }
+    return { timed, allday };
+  }
+  // Side-by-side lanes for blocks that overlap.
+  function lanes(list) {
+    list.sort((a, b) => a.s - b.s || b.e - a.e);
+    let cluster = [], ends = [], maxEnd = -1;
+    const close = () => { for (const ev of cluster) ev.lanes = ends.length; cluster = []; ends = []; };
+    for (const ev of list) {
+      if (ev.s >= maxEnd) close();
+      let i = ends.findIndex((t) => t <= ev.s); if (i < 0) i = ends.length;
+      ends[i] = ev.e; ev.lane = i; cluster.push(ev); maxEnd = Math.max(maxEnd, ev.e);
+    }
+    close();
+    return list;
+  }
+  const evAct = (ev) => (ev.shiftId && (isAdmin() || state.shifts.find((s) => s.id === ev.shiftId)?.by === me.id) ? `data-act="edit-shift" data-id="${ev.shiftId}"` : ev.jobId ? `data-act="job-open" data-id="${ev.jobId}"` : "disabled");
+  const evBody = (ev, time) => `${time ? `<span class="ev-t">${time}</span>` : ""}<b>${esc(ev.title)}</b>${ev.who ? `<span class="ev-who">${esc(ev.who)}</span>` : ""}${ev.sub ? `<span class="ev-sub">${esc(ev.sub)}</span>` : ""}${ev.note ? `<span class="ev-note">${esc(ev.note)}</span>` : ""}${ev.pending ? `<span class="ev-note">in attesa di approvazione</span>` : ""}`;
+  const evTitle = (ev, time) => esc([time, ev.title, ev.who, ev.sub, ev.note, ev.pending ? "In attesa di approvazione" : ""].filter(Boolean).join("\n"));
+
+  // cols: [{ day, pid, head, cls, timed, allday, pins }]
+  function timeGrid(cols, colMin) {
+    const all = cols.flatMap((c) => c.timed), pins = cols.flatMap((c) => c.pins || []);
+    const lo = Math.min(7 * 60, ...all.map((e) => e.s), ...pins.map((p) => p.min)), hi = Math.max(20 * 60, ...all.map((e) => e.e), ...pins.map((p) => p.min + 30));
+    const from = Math.floor(lo / 60) * 60, to = Math.min(1440, Math.ceil(hi / 60) * 60), H = ((to - from) / 60) * HOUR_PX;
+    const y = (m) => ((m - from) / 60) * HOUR_PX;
+    const now = new Date(), nowMin = now.getHours() * 60 + now.getMinutes(), today = isoDay();
+    const hasAllday = cols.some((c) => c.allday.length);
+    const axis = []; for (let m = from; m < to; m += 60) axis.push(`<span data-st="top:${y(m)}px">${fmtMin(m)}</span>`);
+    const col = (c) => {
+      const blocks = lanes(c.timed).map((ev) => {
+        const time = `${fmtMin(ev.s)}–${fmtMin(ev.e)}`, h = Math.max(22, y(ev.e) - y(ev.s) - 2), w = 100 / ev.lanes;
+        return `<button type="button" class="ev k-${ev.kind} ${ev.pending ? "pending" : ""} ${h < 44 ? "short" : ""}" data-st="top:${y(ev.s) + 1}px;height:${h}px;left:calc(${ev.lane * w}% + 2px);width:calc(${w}% - 4px)" ${evAct(ev)} title="${evTitle(ev, time)}">${evBody(ev, time)}</button>`;
+      }).join("");
+      const marks = (c.pins || []).map((p) => `<span class="tg-pin" data-st="top:${y(p.min)}px" title="${esc(`${fmtMin(p.min)} · ${p.loc}`)}">${ICON.pin}</span>`).join("");
+      const line = c.day === today && nowMin >= from && nowMin <= to ? `<i class="tg-now" data-st="top:${y(nowMin)}px"></i>` : "";
+      return `<div class="tg-col ${c.cls || ""}" data-day="${c.day}" ${c.pid ? `data-pid="${c.pid}"` : ""} data-st="height:${H}px">${blocks}${marks}${line}</div>`;
+    };
+    return `<div class="tg" data-st="--cols:${cols.length};--colmin:${colMin}px;--hour:${HOUR_PX}px">
+      <div class="tg-in">
+        <div class="tg-corner"></div>${cols.map((c) => `<div class="tg-head ${c.cls || ""}">${c.head}</div>`).join("")}
+        ${hasAllday ? `<div class="tg-corner tg-adl">Senza orario</div>${cols.map((c) => `<div class="tg-all ${c.cls || ""}">${c.allday.map((ev) => `<button type="button" class="ev flat k-${ev.kind} ${ev.pending ? "pending" : ""}" ${ev.act || evAct(ev)} title="${evTitle(ev)}">${evBody(ev)}</button>`).join("")}</div>`).join("")}` : ""}
+        <div class="tg-axis" data-st="height:${H}px">${axis.join("")}</div>${cols.map(col).join("")}
+      </div>
+    </div>`;
+  }
+
+  function dayGrid(day, people) {
+    const ids = new Set(people.map((p) => p.id)), pins = pinsOf(day, ids), today = isoDay();
+    const cols = people.map((p) => {
+      const { timed, allday } = personDay(p.id, day), mine = pins.filter((x) => x.pid === p.id), last = mine[mine.length - 1];
+      const where = last ? `<span class="tg-where">${ICON.pin}<span>${esc(last.loc)} · ${fmtMin(last.min)}</span></span>` : `<span class="tg-where none">Nessuna posizione</span>`;
+      return { day, pid: p.id, cls: day === today ? "today" : "", timed, allday, pins: mine,
+        head: `<button type="button" class="tg-person" data-act="detail" data-id="${p.id}"><b>${esc(p.name)}</b><span>${roleLabel(p.role)}</span></button>${where}` };
+    });
+    return timeGrid(cols, 150);
+  }
+
+  function weekGrid(start, end, people) {
+    const ids = new Set(people.map((p) => p.id)), today = isoDay(), solo = !isAdmin();
+    const cols = daysOf(start, end).map((d) => {
+      const dt = parseDay(d), pins = pinsOf(d, ids);
+      const { timed, allday } = solo ? personDay(me.personId, d) : agencyDay(d, people);
+      // Reported positions: for the office, one chip per place with how many people; for staff, their own.
+      const places = new Map(); for (const p of pins) places.set(p.loc, (places.get(p.loc) || new Set()).add(p.pid));
+      const chips = solo ? [] : [...places.entries()].map(([loc, who]) => ({ kind: "here", title: loc, note: who.size === 1 ? personName([...who][0]).split(" ")[0] : `${who.size} persone`, act: `data-act="cal-goto" data-day="${d}"` }));
+      return { day: d, cls: d === today ? "today" : "", timed, allday: [...allday, ...chips], pins: solo ? pins : [],
+        head: `<button type="button" class="tg-day" data-act="cal-goto" data-day="${d}" title="Apri il giorno"><span>${dt.toLocaleDateString(locale, { weekday: "short" })}</span><b>${dt.getDate()}</b></button>` };
+    });
+    return timeGrid(cols, 118);
   }
 
   function monthGrid(start, end, ent, today) {
@@ -2200,7 +2339,7 @@ ${docCss()}
       return `<li class="k-${e.kind}"><${tag} class="ag-line">${kindIcon(e.kind)}<span><span class="ag-k">${KIND[e.kind]}</span>${txt}</span></${tag.split(" ")[0]}></li>`;
     };
     return `<section class="panel cal-agenda" aria-label="${esc(dayLong(day))}">
-      <div class="ag-head"><h2>${day === isoDay() ? "Oggi · " : ""}${esc(dayLong(day))}</h2>${isAdmin() ? `<button class="btn sm" type="button" data-act="cal-book" data-day="${day}">${ICON.plus || "+"} Prenota un lavoro</button>` : ""}</div>
+      <div class="ag-head"><h2>${day === isoDay() ? "Oggi · " : ""}${esc(dayLong(day))}</h2><button class="btn sm" type="button" data-act="cal-goto" data-day="${day}">${CAL}Apri il giorno</button>${isAdmin() ? `<button class="btn sm" type="button" data-act="cal-book" data-day="${day}">${ICON.plus || "+"} Prenota un lavoro</button>` : ""}</div>
       ${withInfo.length ? `<ul class="ag-people">${withInfo.map((p) => `<li><div class="ag-who"><button class="comp-name" type="button" data-act="detail" data-id="${p.id}">${esc(p.name)}</button><span class="tag ${p.role === "technician" ? "technician" : "model"}">${roleLabel(p.role)}</span></div><ul class="ag-lines">${m.get(p.id).map(line).join("")}</ul></li>`).join("")}</ul>`
         : `<p class="muted">${isAdmin() ? "Nessuno è prenotato o ha segnalato una posizione in questo giorno." : "Niente in questo giorno."}</p>`}
       ${isAdmin() && withInfo.length && without.length ? `<p class="ag-none"><span class="eyebrow">Senza informazioni</span> ${without.map((p) => esc(p.name)).join(", ")}</p>` : ""}
@@ -2210,6 +2349,7 @@ ${docCss()}
   $("#cal-seg").addEventListener("click", (e) => {
     const b = e.target.closest("button"); if (!b) return;
     cui.view = b.dataset.cv;
+    if (cui.sel) cui.anchor = cui.sel;
     if (location.hash !== "#calendar") history.replaceState(null, "", "#calendar");
     renderCalendar();
   });
@@ -2219,10 +2359,17 @@ ${docCss()}
     else {
       const dir = b.dataset.cal === "next" ? 1 : -1;
       if (cui.view === "month") { const d = parseDay(cui.anchor); cui.anchor = isoDay(new Date(d.getFullYear(), d.getMonth() + dir, 1)); }
-      else cui.anchor = addDays(cui.anchor, 7 * dir);
+      else cui.anchor = addDays(cui.anchor, (cui.view === "day" ? 1 : 7) * dir);
       cui.sel = "";
     }
     renderCalendar();
+  });
+  $("#cal").addEventListener("click", (e) => {
+    const col = e.target.closest(".tg-col");
+    if (!col || e.target.closest(".ev, .tg-pin") || !isAdmin()) return;
+    const from = toMin($(".tg-axis span", col.parentNode)?.textContent) ?? 420;
+    const min = Math.min(1410, from + Math.floor(((e.clientY - col.getBoundingClientRect().top) / HOUR_PX) * 2) * 30);
+    openJob(null, col.dataset.day, fmtMin(min), col.dataset.pid);
   });
   $("#cal-role").addEventListener("change", (e) => { cui.role = e.target.value; renderCalendar(); });
 

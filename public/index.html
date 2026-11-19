@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Talent &amp; Crew</title>
+<title>Lumia</title>
 <meta name="description" content="Dove sono i tuoi modelli e tecnici, le ore lavorate, quanto è dovuto e le ricevute da rimborsare.">
 <meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#17181C" media="(prefers-color-scheme: dark)">
@@ -13,7 +13,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="Talent &amp; Crew">
+<meta name="apple-mobile-web-app-title" content="Lumia">
 <link rel="stylesheet" href="/fonts/fonts.css">
 <link rel="stylesheet" href="/styles.css">
 <script src="/app.js" defer></script>
@@ -23,7 +23,7 @@
 <!-- ============ Sign in / first-run setup ============ -->
 <div class="auth" id="auth" hidden>
   <div class="auth-art">
-    <div class="wordmark"><b>Talent <i>&amp;</i> Crew</b><span id="auth-site">Registro dell'agenzia</span></div>
+    <div class="wordmark"><b>Lumia<i>.</i></b><span id="auth-site">Registro dell'agenzia</span></div>
     <h2>Convocazione.<br>Fine.<br><em>Pagato.</em></h2>
     <div class="callsheet" aria-hidden="true">
       <div><span>Convocazione</span><b>06:00</b></div>
@@ -58,7 +58,7 @@
 <!-- ============ App ============ -->
 <div class="app" id="app" hidden>
   <aside class="rail">
-    <a class="wordmark" href="#"><b>Talent <i>&amp;</i> Crew</b><span id="today"></span></a>
+    <a class="wordmark" href="#"><b>Lumia<i>.</i></b><span id="today"></span></a>
     <nav class="nav" aria-label="Sezioni">
       <a href="#calendar" data-tab="calendar" id="nav-cal"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 9.5h17M8 3v4M16 3v4M7.5 13.5h3M7.5 16.5h6"/></svg><span>Calendario</span></a>
       <a href="#team" data-tab="team" id="nav-team"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5"/><circle cx="17" cy="9" r="2.4"/><path d="M15.5 14.2c2.6-.4 4.6 1.2 5 4.3"/></svg><span>Persone</span></a>
@@ -105,6 +105,7 @@
       </div>
       <div class="cal-bar">
         <div class="seg" role="group" aria-label="Vista" id="cal-seg">
+          <button type="button" data-cv="day" aria-pressed="false">Giorno</button>
           <button type="button" data-cv="week" aria-pressed="true">Settimana</button>
           <button type="button" data-cv="month" aria-pressed="false">Mese</button>
           <button type="button" data-cv="list" aria-pressed="false">Lavori</button>
@@ -146,7 +147,7 @@
       </div>
       <div class="filters">
         <select id="h-person" aria-label="Persona"></select>
-        <input type="month" id="h-month" aria-label="Mese">
+        <select id="h-month" aria-label="Mese"></select>
         <button class="btn quiet sm" type="button" id="h-all">Sempre</button>
       </div>
       <div id="queue"></div>
@@ -353,7 +354,7 @@
       <div class="field st-when"><span class="lbl">Periodo</span>
         <div class="st-period">
           <div class="seg" role="group" aria-label="Periodo" id="st-mode"><button type="button" data-mode="month" aria-pressed="true">Mese</button><button type="button" data-mode="range" aria-pressed="false">Personalizzato</button></div>
-          <input type="month" id="st-month" aria-label="Mese">
+          <select id="st-month" aria-label="Mese"></select>
           <span class="st-range" id="st-range" hidden><input type="date" id="st-from" aria-label="Dal"><span>al</span><input type="date" id="st-to" aria-label="Al"></span>
         </div>
       </div>
@@ -415,10 +416,11 @@
         <div class="field"><label for="jf-client">Cliente</label><input id="jf-client" list="jf-clients" placeholder="Maison Verdi" autocomplete="off"><datalist id="jf-clients"></datalist></div>
         <div class="field"><label for="jf-name">Lavoro</label><input id="jf-name" placeholder="Lookbook primavera" autocomplete="off"></div>
       </div>
-      <div class="grid3">
+      <div class="grid2">
         <div class="field"><label for="jf-date">Data</label><input id="jf-date" type="date" required></div>
         <div class="field"><label for="jf-end">Fino a</label><input id="jf-end" type="date"></div>
         <div class="field"><label for="jf-call">Convocazione</label><input id="jf-call" type="time"></div>
+        <div class="field"><label for="jf-wrap">Fine</label><input id="jf-wrap" type="time"></div>
       </div>
       <div class="field"><label for="jf-loc">Posizione</label><input id="jf-loc" placeholder="Piazza Duomo 20, Milano" autocomplete="off"></div>
       <div class="field"><span class="lbl">Prenotati</span><div class="pick" id="jf-people"></div></div>

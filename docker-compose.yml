@@ -7,10 +7,20 @@
 # HTTPS reverse proxy or tunnel and point both site addresses at it.
 # Everything it stores (database, receipt photos, daily backups) is in ./data: back that up.
 services:
+  # Docker creates ./data owned by root on a fresh server; hand it to the app's user first.
+  data-owner:
+    image: lumia:latest
+    user: root
+    command: ["chown", "-R", "node:node", "/data"]
+    volumes:
+      - ./data:/data
   app:
     build: .
     image: lumia:latest
     restart: unless-stopped
+    depends_on:
+      data-owner:
+        condition: service_completed_successfully
     env_file: .env
     environment:
       DATA_DIR: /data

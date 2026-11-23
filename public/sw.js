@@ -2,7 +2,7 @@
    on the device so the app opens and works with no signal. */
 // Paths are relative to where this file is served: / for the public site, /admin/ for the office.
 const BASE = new URL("./", self.location).pathname;
-const SHELL_CACHE = "tc-shell-v2";
+const SHELL_CACHE = "tc-shell-v3";
 const PHOTO_CACHE = "tc-photos-v1";
 const SHELL = [
   "./",
@@ -56,6 +56,10 @@ self.addEventListener("fetch", (e) => {
   }
   // Live data goes straight to the server (also another site's, e.g. /admin/api/ seen from /).
   if (url.pathname.includes("/api/")) return;
+
+  // Page loads: only this site's own page. Anything else (e.g. /admin, the office, which the
+  // server redirects to /admin/) goes to the server, or the wrong app would open there.
+  if (req.mode === "navigate" && url.pathname !== BASE && url.pathname !== BASE + "index.html") return;
 
   // App shell: answer from the device instantly, refresh the copy in the background.
   e.respondWith((async () => {

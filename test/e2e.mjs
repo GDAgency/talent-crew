@@ -147,6 +147,12 @@ await step("cross-site", async () => {
   ok("her payment is on her own page", (await s.textContent("#mypage")).includes("Pagamenti ricevuti") && (await s.textContent("#mypage")).includes("877,50"));
   const names = await Promise.all([ADMIN, TEAM].map(async (u) => { const p = await (await b.newContext()).newPage(); await p.goto(u + "/manifest.webmanifest"); return JSON.parse(await p.innerText("body")).name; }));
   ok("each site installs under its own name", names[0] !== names[1], names);
+  // Team site opened first in the same browser (its service worker installed), then the office address typed in.
+  const both = await (await b.newContext()).newPage();
+  await both.goto(TEAM); await both.waitForSelector("#login-form:not([hidden])"); await both.waitForTimeout(1500);
+  await both.goto(ADMIN); await both.waitForSelector("#login-form:not([hidden])");
+  ok("office opens as the office after the team site", (await both.textContent("#auth-site")) === "Ufficio", await both.textContent("#auth-site"));
+  await both.context().close();
   ok("phone page has no sideways scroll", (await s.evaluate(() => document.documentElement.scrollWidth)) <= 390);
 });
 

@@ -612,6 +612,9 @@
     render();
   }
   let installEvt = null;
+  // Opened inside the Android or iPhone app (they add this to the browser's user agent).
+  const inLumiaApp = /LumiaApp/.test(navigator.userAgent);
+  const defaultAppServer = () => { const c = (siteInfo?.clientUrl) || location.origin; return c; };
   const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
   const standalone = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
 
@@ -641,7 +644,14 @@
         </dl>
         <div><button class="btn" type="button" data-act="sync-now">Sincronizza ora</button></div>
       </section>
-      <section class="panel"><h2>Usala come app</h2>${installPanel}</section>
+      <section class="panel"><h2>Usala come app</h2>${installPanel}${inLumiaApp ? `<div><a class="btn" href="${location.protocol === "https:" && /android/i.test(navigator.userAgent) ? "https://localhost/?cambia=1" : "capacitor://localhost/?cambia=1"}">Cambia server</a></div>` : ""}</section>
+      ${isAdmin() ? `<section class="panel">
+        <h2>App per telefono</h2>
+        <p>Le app Android e iPhone chiedono a questo server dove andare ogni volta che si aprono. Se spostate Lumia su un altro server, scrivete qui il nuovo indirizzo <b>prima</b> di spegnere questo: alla prossima apertura le app passano da sole al nuovo.</p>
+        <div class="field"><label for="app-server">Indirizzo del server</label><input id="app-server" maxlength="200" inputmode="url" autocapitalize="none" spellcheck="false" placeholder="${esc(defaultAppServer())}" value="${esc(state.settings.appServer || "")}"><span class="hint">Il sito pubblico (squadra e clienti), con https. Vuoto: questo stesso server, ${esc(defaultAppServer())}.</span></div>
+        <div class="err" id="app-server-err" hidden></div>
+        <p><a href="https://github.com/GDAgency/talent-crew/releases" target="_blank" rel="noopener">Scarica le app</a></p>
+      </section>` : ""}
       ${isAdmin() ? `<section class="panel">
         <h2>Valuta</h2>
         <div class="field"><label for="currency">Importi mostrati in</label>
@@ -674,6 +684,20 @@
     $("#currency")?.addEventListener("change", (e) => save("settings", { ...state.settings, id: "main", currency: e.target.value }).then(() => toast("Valuta salvata")));
     if (agencyDraft && $("#agency")) { const a = $("#agency"); a.value = agencyDraft[0]; a.focus(); a.setSelectionRange(agencyDraft[1], agencyDraft[1]); }
     $("#agency-addr")?.addEventListener("change", (e) => save("settings", { ...state.settings, id: "main", agencyAddress: e.target.value.trim().slice(0, 160) }).then(() => toast("Indirizzo dell'agenzia salvato")));
+    $("#app-server")?.addEventListener("change", (e) => {
+      const err = $("#app-server-err"), raw = e.target.value.trim();
+      let v = "";
+      if (raw) {
+        try {
+          const u = new URL(/^[a-z]+:\/\//i.test(raw) ? raw : "https://" + raw);
+          if (u.protocol !== "https:") return showErr(err, "Le app funzionano solo con indirizzi https (serve un certificato, anche per un indirizzo IP).");
+          v = u.origin;
+        } catch { return showErr(err, "Non è un indirizzo valido. Esempio: app.agenzia.it"); }
+      }
+      showErr(err, "");
+      e.target.value = v;
+      save("settings", { ...state.settings, id: "main", appServer: v }).then(() => toast(v ? `Le app useranno ${v}` : "Le app useranno questo server"));
+    });
     $("#agency")?.addEventListener("change", (e) => save("settings", { ...state.settings, id: "main", agencyName: e.target.value.trim().slice(0, 80) }).then(() => toast("Nome dell'agenzia salvato")));
     $("#logout-btn").addEventListener("click", (e) => logout(e.currentTarget, ob + ph));
     if (isAdmin()) { bindSettingsExtras(); paintActivity(); }
@@ -2756,10 +2780,12 @@ ${docCss()}
   $("#today").textContent = new Date().toLocaleDateString(locale, { weekday: "short", day: "numeric", month: "short", year: "numeric" });
 
   // Office site (admins) or team site (staff): adjust the sign-in screen to match.
+  let siteInfo = null;
   async function loadSite() {
     let site = await meta.get("site").catch(() => null);
     try { const r = await fetch("/api/site", { credentials: "same-origin" }); if (r.ok) { site = await r.json(); await meta.set("site", site); } } catch { /* offline: use the saved copy */ }
     if (!site) return;
+    siteInfo = site;
     const host = (u) => (u ? u.replace(/^https?:\/\//, "") : "");
     const other = $("#li-other");
     if (site.site === "admin") {

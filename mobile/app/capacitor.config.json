@@ -1,0 +1,10 @@
+{
+  "appId": "com.gdagency.lumia",
+  "appName": "Lumia",
+  "webDir": "www",
+  "appendUserAgent": "LumiaApp",
+  "backgroundColor": "#121316",
+  "server": { "allowNavigation": ["*"] },
+  "android": { "allowMixedContent": false },
+  "ios": { "contentInset": "never", "scrollEnabled": true }
+}

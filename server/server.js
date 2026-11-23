@@ -679,6 +679,16 @@ async function route(req, res) {
   // it to cross-site form posts, so it blocks CSRF together with SameSite.
   if (req.method !== "GET" && req.headers["x-tc"] !== "1") return fail(res, 403, "Intestazione della richiesta mancante.");
 
+  // Where the Android and iPhone apps should go. The apps ask this on every start, so
+  // an administrator can move them to a new server (Impostazioni → App per telefono).
+  // Public, and readable from the apps' own start page (another origin).
+  if (p === "/api/app-config" && req.method === "GET") {
+    const set = q.getRec.get("settings", "main"), cfg = set && !set.deleted ? JSON.parse(set.data) : {};
+    const own = CLIENT_HOSTS[0] || String(req.headers.host || "").replace(/:\d+$/, "");
+    return send(res, 200, { server: str(cfg.appServer, 200) || `https://${own}`, name: str(cfg.agencyName, 80) || "Lumia" },
+      { "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store" });
+  }
+
   if (p === "/api/site" && req.method === "GET") {
     return send(res, 200, { site, adminUrl: siteUrl(ADMIN_HOSTS), clientUrl: siteUrl(CLIENT_HOSTS), setupCode: !!SETUP_CODE, signups: SIGNUPS && site !== "admin" });
   }

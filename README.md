@@ -29,6 +29,13 @@ docker compose up -d --build
 - A customer sees jobs created from their own requests. To also show them the other jobs under a client name, an administrator confirms which client the account belongs to (Accessi della squadra). Customers never see rates, hours or the rest of the ledger.
 - The office marks a customer's payment on the job ("Il cliente ci ha pagato?" → Ha pagato).
 
+## Android and iPhone apps
+
+`mobile/app` is a small Capacitor app for both phones. It has no address built in for good: every time it opens it asks the last server it knew (`/api/app-config`) where Lumia lives now, then opens that site. To move the apps to a new server, an admin writes the new address in **Impostazioni → App per telefono** on the old server before switching it off. If no server answers, the app asks for the address; inside the app, Impostazioni also has **Cambia server**. Addresses must be https.
+
+- **Android:** `mobile/app/prepare.sh android <version> <build>` then `mobile/app/build-android.sh <version>` (JDK 21, Android SDK, and the signing keystore in `KEYSTORE`/`KEYSTORE_PASSWORD`). Keep the keystore safe: every update must be signed with it. The `.apk` installs on any Android 6+ phone.
+- **iPhone:** iOS apps can only be compiled with Xcode on a Mac, so GitHub builds it: Actions → **iPhone app** → Run workflow (or `gh workflow run ios.yml -f version=1.0.0 -f build=1 -f tag=ios-v1.0.0`). It attaches an unsigned `.ipa` to the release. Apple only installs signed apps: sign it with Sideloadly/AltStore (free Apple ID, every 7 days) or, with an Apple Developer account, distribute through TestFlight / the App Store.
+
 ## Who can do what
 
 | | Staff | Admin |

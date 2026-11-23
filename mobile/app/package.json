@@ -1,0 +1,12 @@
+{
+  "name": "lumia-mobile",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Android and iPhone shell for Lumia: a start page that asks the server where to go, then opens the site.",
+  "dependencies": {
+    "@capacitor/android": "7.6.10",
+    "@capacitor/cli": "7.6.10",
+    "@capacitor/core": "7.6.10",
+    "@capacitor/ios": "7.6.10"
+  }
+}

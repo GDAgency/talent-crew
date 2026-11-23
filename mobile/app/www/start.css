@@ -1,0 +1,13 @@
+:root { --bg: #121316; --ink: #f1f1ee; --muted: #9a9b98; --accent: #2b3fd6; --line: #34363b; }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); font: 16px/1.4 -apple-system, "Segoe UI", Roboto, sans-serif; }
+main { min-height: 100%; display: flex; flex-direction: column; justify-content: center; gap: 18px; padding: max(24px, env(safe-area-inset-top)) 24px max(24px, env(safe-area-inset-bottom)); max-width: 420px; margin: 0 auto; }
+.mark { font-weight: 800; font-size: 40px; letter-spacing: .02em; text-transform: uppercase; }
+.mark i { color: var(--accent); font-style: normal; }
+.msg { margin: 0; color: var(--muted); }
+form { display: flex; flex-direction: column; gap: 8px; }
+label { font-weight: 600; font-size: 14px; }
+input { font: inherit; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--line); background: #1c1d21; color: var(--ink); }
+.hint { margin: 0; font-size: 13px; color: var(--muted); }
+button { margin-top: 8px; font: inherit; font-weight: 600; padding: 13px; border: 0; border-radius: 10px; background: var(--accent); color: #fff; }
+[hidden] { display: none !important; }

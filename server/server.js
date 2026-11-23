@@ -19,12 +19,13 @@ const HOST = process.env.HOST || "0.0.0.0";
 const SESSION_DAYS = 90;
 const MAX_PHOTO_BYTES = 15 * 1024 * 1024;
 const PHOTO_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "application/pdf"]);
-const COLLECTIONS = new Set(["people", "shifts", "payments", "receipts", "settings", "jobs", "places"]);
+const COLLECTIONS = new Set(["people", "shifts", "payments", "receipts", "settings", "jobs", "places", "requests"]);
 const ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 
 // ---------- Two sites, one server ----------
 // ADMIN_HOSTS (e.g. adminlumia.rogatski.com) is the office site: admin accounts only.
-// CLIENT_HOSTS (e.g. lumia.rogatski.com) is the team site: staff accounts only.
+// CLIENT_HOSTS (e.g. lumia.rogatski.com) is the public site: staff and customer accounts,
+// and where both sign up (set SIGNUPS=off to close registration).
 // With neither set (running on your own computer) any host serves everyone.
 const hostList = (v) => String(v || "").split(",").map((h) => h.trim().toLowerCase()).filter(Boolean);
 const ADMIN_HOSTS = hostList(process.env.ADMIN_HOSTS);
@@ -32,6 +33,7 @@ const CLIENT_HOSTS = hostList(process.env.CLIENT_HOSTS);
 const SPLIT_SITES = ADMIN_HOSTS.length > 0 || CLIENT_HOSTS.length > 0;
 // First-run setup can require a one-time code, so nobody who finds the site first can claim it.
 const SETUP_CODE = String(process.env.SETUP_CODE || "");
+const SIGNUPS = String(process.env.SIGNUPS || "on").toLowerCase() !== "off";
 function siteOf(req) {
   if (!SPLIT_SITES) return "any";
   const host = String(req.headers.host || "").toLowerCase().replace(/:\d+$/, "");
@@ -59,7 +61,7 @@ db.exec(`
     username TEXT NOT NULL UNIQUE COLLATE NOCASE,
     name TEXT NOT NULL,
     pw_hash TEXT NOT NULL,
-    role TEXT NOT NULL CHECK (role IN ('admin','staff')),
+    role TEXT NOT NULL CHECK (role IN ('admin','staff','client')),
     disabled INTEGER NOT NULL DEFAULT 0,
     created_at INTEGER NOT NULL
   );
@@ -106,11 +108,44 @@ db.exec(`
 // A login can be linked to the person it belongs to on the board ("My page").
 if (!db.prepare("PRAGMA table_info(users)").all().some((c) => c.name === "person_id")) db.exec("ALTER TABLE users ADD COLUMN person_id TEXT");
 
+// Customers are a third kind of account. Databases created before that have a CHECK that
+// refuses the role, and SQLite can't alter a CHECK: rebuild the table once, in a transaction.
+if (!db.prepare("SELECT sql FROM sqlite_master WHERE name = 'users'").get().sql.includes("'client'")) {
+  db.exec("PRAGMA foreign_keys = OFF");
+  db.exec(`BEGIN IMMEDIATE;
+    CREATE TABLE users_new (
+      id TEXT PRIMARY KEY,
+      username TEXT NOT NULL UNIQUE COLLATE NOCASE,
+      name TEXT NOT NULL,
+      pw_hash TEXT NOT NULL,
+      role TEXT NOT NULL CHECK (role IN ('admin','staff','client')),
+      disabled INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL,
+      person_id TEXT
+    );
+    INSERT INTO users_new (id, username, name, pw_hash, role, disabled, created_at, person_id)
+      SELECT id, username, name, pw_hash, role, disabled, created_at, person_id FROM users;
+    DROP TABLE users;
+    ALTER TABLE users_new RENAME TO users;
+    COMMIT;`);
+  db.exec("PRAGMA foreign_keys = ON");
+  console.log("Accounts table upgraded for customer accounts.");
+}
+// Self sign-up: staff wait for the office (pending); customers say which company they are
+// (company) and the office confirms which client they see jobs for (client_name).
+{
+  const cols = new Set(db.prepare("PRAGMA table_info(users)").all().map((c) => c.name));
+  for (const [name, type] of [["pending", "INTEGER NOT NULL DEFAULT 0"], ["company", "TEXT"], ["client_name", "TEXT"], ["phone", "TEXT"], ["wants", "TEXT"]]) {
+    if (!cols.has(name)) db.exec(`ALTER TABLE users ADD COLUMN ${name} ${type}`);
+  }
+}
+
 const q = {
   userCount: db.prepare("SELECT COUNT(*) AS n FROM users"),
   userByName: db.prepare("SELECT * FROM users WHERE username = ?"),
   userById: db.prepare("SELECT * FROM users WHERE id = ?"),
-  users: db.prepare("SELECT id, username, name, role, disabled, created_at, person_id AS personId FROM users ORDER BY name COLLATE NOCASE"),
+  users: db.prepare("SELECT id, username, name, role, disabled, created_at, person_id AS personId, pending, company, client_name AS clientName, phone, wants FROM users ORDER BY name COLLATE NOCASE"),
+  liveRecs: db.prepare("SELECT data FROM records WHERE c = ? AND deleted = 0"),
   insertUser: db.prepare("INSERT INTO users (id, username, name, pw_hash, role, created_at) VALUES (?, ?, ?, ?, ?, ?)"),
   session: db.prepare("SELECT u.* FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ? AND s.expires_at > ? AND u.disabled = 0"),
   insertSession: db.prepare("INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)"),
@@ -144,7 +179,7 @@ function checkPassword(pw, stored) {
   return crypto.timingSafeEqual(expected, got);
 }
 const sha256 = (s) => crypto.createHash("sha256").update(s).digest("hex");
-const publicUser = (u) => ({ id: u.id, username: u.username, name: u.name, role: u.role, personId: u.person_id || null });
+const publicUser = (u) => ({ id: u.id, username: u.username, name: u.name, role: u.role, personId: u.person_id || null, pending: !!u.pending, company: u.company || "", clientName: u.client_name || "" });
 const str = (v, max = 500) => String(v ?? "").slice(0, max);
 
 function parseCookies(req) {
@@ -259,6 +294,7 @@ const PERSON_MONEY_FIELDS = PAY_KEYS;
 const ownsPerson = (user, personId) => !!user.person_id && personId === user.person_id;
 function visibleTo(user, c, data) {
   if (user.role === "admin" || !data) return true;
+  if (c === "requests") return false;
   if (c === "payments") return ownsPerson(user, data.personId);
   if (c === "shifts" || c === "receipts") return ownsPerson(user, data.personId) || data.by === user.id;
   return true;
@@ -412,6 +448,12 @@ function auditChange(user, c, id, prev, data) {
     else if (prev.invoiceStatus !== data.invoiceStatus && data.invoiceStatus === "paid") verb = "job.clientpaid";
     else if (paidNow) { verb = "job.crewpaid"; personId = paidNow; }
     else return;
+  } else if (c === "requests") {
+    if (add || del || prev.status === data.status) return;
+    verb = data.status === "accepted" ? "request.accept" : data.status === "declined" ? "request.decline" : null;
+    if (!verb) return;
+    personId = null;
+    info = { title: str(cur.title, 120), client: str(cur.clientName, 80) };
   } else if (c === "places") {
     verb = add ? "place.add" : del ? "place.delete" : "place.edit"; info = { name: str(cur.name, 120) };
   } else return;
@@ -504,6 +546,69 @@ function getPhoto(req, res, user, id) {
   });
 }
 
+// ---------- Customers ----------
+// A customer sees two things: the requests they sent, and the jobs done for them with the
+// people sent. A job is theirs when it was created from one of their requests, or when the
+// office has confirmed which client the account belongs to and the job is for that client.
+const signups = new Map();
+const signupThrottled = (ip) => { const e = signups.get(ip); return !!e && e.until > Date.now() && e.count >= 5; };
+function noteSignup(ip) {
+  const e = signups.get(ip);
+  if (!e || e.until < Date.now()) signups.set(ip, { count: 1, until: Date.now() + 3600e3 }); else e.count++;
+}
+const sameName = (a, b) => String(a || "").trim().toLowerCase() === String(b || "").trim().toLowerCase();
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/, HHMM = /^\d{2}:\d{2}$/;
+const myRequests = (user) => q.liveRecs.all("requests").map((r) => JSON.parse(r.data)).filter((r) => r.userId === user.id);
+function clientOverview(user) {
+  const requests = myRequests(user), mine = new Set(requests.map((r) => r.id));
+  const people = new Map(q.liveRecs.all("people").map((r) => { const p = JSON.parse(r.data); return [p.id, p]; }));
+  const jobs = q.liveRecs.all("jobs").map((r) => JSON.parse(r.data))
+    .filter((j) => (j.requestId && mine.has(j.requestId)) || (user.client_name && sameName(j.client, user.client_name)))
+    .map((j) => ({
+      id: j.id, title: j.title || "", client: j.client || "", date: j.date || "", endDate: j.endDate || "", call: j.call || "", wrap: j.wrap || "", location: j.location || "",
+      requestId: j.requestId || "",
+      people: (j.people || []).map((id) => people.get(id)).filter(Boolean).map((p) => ({ name: p.name || "", role: p.role || "", speciality: p.speciality || "" })),
+      payment: j.invoiceStatus === "paid" ? "paid" : j.invoiceStatus === "invoiced" ? "invoiced" : "none", paidAt: j.clientPaidAt || "",
+      fee: j.billing === "hourly" ? null : Number(j.fee) || 0,
+    }));
+  const set = q.getRec.get("settings", "main"), settings = set && !set.deleted ? JSON.parse(set.data) : {};
+  return {
+    requests: requests.map(({ userId, by, ...r }) => r).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)),
+    jobs: jobs.sort((a, b) => b.date.localeCompare(a.date)),
+    currency: settings.currency || "EUR", agency: settings.agencyName || "",
+  };
+}
+function putRecord(c, data) {
+  q.upsertRec.run(c, data.id, JSON.stringify(data), data.updatedAt, q.bumpRev.get().value, data.deleted ? 1 : 0);
+}
+function clientRequest(res, user, b) {
+  const title = str(b.title, 120).trim(), date = str(b.date, 10), endDate = str(b.endDate, 10);
+  const count = (v) => Math.min(50, Math.max(0, Math.floor(Number(v) || 0)));
+  if (!title) return fail(res, 400, "Scrivi per cosa ti servono le persone.");
+  if (!ISO_DAY.test(date)) return fail(res, 400, "Scegli la data.");
+  if (endDate && (!ISO_DAY.test(endDate) || endDate < date)) return fail(res, 400, "La data di fine viene prima dell'inizio.");
+  const models = count(b.models), technicians = count(b.technicians);
+  if (!models && !technicians) return fail(res, 400, "Indica quante persone ti servono.");
+  if (myRequests(user).filter((r) => r.status === "new").length >= 20) return fail(res, 429, "Hai già molte richieste in attesa. Aspetta la risposta dell'ufficio.");
+  const now = Date.now();
+  const data = {
+    id: crypto.randomUUID(), userId: user.id, by: user.id, clientName: user.client_name || user.company || user.name, contact: user.name, phone: user.phone || "",
+    title, date, endDate: endDate > date ? endDate : "", call: HHMM.test(b.call) ? b.call : "", wrap: HHMM.test(b.wrap) ? b.wrap : "", location: str(b.location, 200).trim(),
+    models, technicians, notes: str(b.notes, 1000).trim(), status: "new", jobId: "", createdAt: now, updatedAt: now, deleted: false,
+  };
+  putRecord("requests", data);
+  writeAudit(user, "request.add", { c: "requests", id: data.id, info: { title, client: data.clientName } });
+  return send(res, 200, { ok: true, id: data.id });
+}
+function clientCancel(res, user, id) {
+  const rec = q.getRec.get("requests", id), r = rec && !rec.deleted ? JSON.parse(rec.data) : null;
+  if (!r || r.userId !== user.id) return fail(res, 404, "Richiesta non trovata.");
+  if (r.status !== "new") return fail(res, 409, "L'ufficio ha già risposto a questa richiesta.");
+  putRecord("requests", { ...r, status: "cancelled", updatedAt: Date.now() });
+  writeAudit(user, "request.cancel", { c: "requests", id, info: { title: r.title, client: r.clientName } });
+  return send(res, 200, { ok: true });
+}
+
 // ---------- Static files ----------
 const MIME = {
   ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8",
@@ -575,7 +680,7 @@ async function route(req, res) {
   if (req.method !== "GET" && req.headers["x-tc"] !== "1") return fail(res, 403, "Intestazione della richiesta mancante.");
 
   if (p === "/api/site" && req.method === "GET") {
-    return send(res, 200, { site, adminUrl: siteUrl(ADMIN_HOSTS), clientUrl: siteUrl(CLIENT_HOSTS), setupCode: !!SETUP_CODE });
+    return send(res, 200, { site, adminUrl: siteUrl(ADMIN_HOSTS), clientUrl: siteUrl(CLIENT_HOSTS), setupCode: !!SETUP_CODE, signups: SIGNUPS && site !== "admin" });
   }
 
   if (p === "/api/me" && req.method === "GET") {
@@ -627,9 +732,46 @@ async function route(req, res) {
     return send(res, 200, { ok: true });
   }
 
+  // Anyone can register on the public site: people who work with the agency (they wait
+  // for the office to approve them) and customers (they can send requests straight away).
+  if (p === "/api/signup" && req.method === "POST") {
+    if (!SIGNUPS || site === "admin") return fail(res, 403, "Le iscrizioni non sono aperte su questo sito.");
+    if (q.userCount.get().n === 0) return fail(res, 409, "Questo sito non è ancora stato configurato.");
+    if (signupThrottled(ip)) return fail(res, 429, "Troppe iscrizioni da questa connessione. Riprova più tardi.");
+    const b = await readJson(req, 10_000);
+    const kind = b.kind === "client" ? "client" : "staff";
+    const username = str(b.username, 40).trim(), name = str(b.name, 80).trim();
+    const company = kind === "client" ? str(b.company, 80).trim() : "", phone = str(b.phone, 40).trim();
+    if (!name) return fail(res, 400, "Inserisci nome e cognome.");
+    if (kind === "client" && !company) return fail(res, 400, "Inserisci il nome dell'azienda.");
+    if (!validUsername(username)) return fail(res, 400, "Nome utente: 3–40 tra lettere, numeri o . _ @ -");
+    if (!validPassword(b.password)) return fail(res, 400, "La password deve avere almeno 8 caratteri.");
+    if (q.userByName.get(username)) return fail(res, 409, "Questo nome utente è già in uso.");
+    const id = crypto.randomUUID();
+    q.insertUser.run(id, username, name, hashPassword(b.password), kind, Date.now());
+    db.prepare("UPDATE users SET pending = ?, company = ?, phone = ?, wants = ? WHERE id = ?")
+      .run(kind === "staff" ? 1 : 0, company || null, phone || null, kind === "staff" ? (b.wants === "technician" ? "technician" : "model") : null, id);
+    noteSignup(ip);
+    const u = q.userById.get(id);
+    writeAudit(u, "account.signup", { info: { target: name, role: kind, company } });
+    startSession(req, res, u);
+    return send(res, 200, { user: publicUser(u) });
+  }
+
   // Everything below needs a signed-in user.
   const user = currentUser(req);
   if (!user) return fail(res, 401, "Accesso non effettuato.");
+
+  // Customers have their own small API and nothing else (no sync: they never see the ledger).
+  if (user.role === "client") {
+    if (p === "/api/client/overview" && req.method === "GET") return send(res, 200, clientOverview(user));
+    if (p === "/api/client/requests" && req.method === "POST") return clientRequest(res, user, await readJson(req, 20_000));
+    const cr = p.match(/^\/api\/client\/requests\/([A-Za-z0-9_-]{1,64})\/cancel$/);
+    if (cr && req.method === "POST") return clientCancel(res, user, cr[1]);
+    if (p !== "/api/password") return fail(res, 403, "Non disponibile per gli account cliente.");
+  }
+  // A person who signed up sees nothing until the office approves them.
+  if (user.role === "staff" && user.pending && p !== "/api/password") return fail(res, 403, "La tua iscrizione è in attesa di approvazione da parte dell'ufficio.");
 
   if (p === "/api/sync" && req.method === "POST") {
     const body = await readJson(req, 8 * 1024 * 1024);
@@ -683,13 +825,16 @@ async function route(req, res) {
     if (p === "/api/users" && req.method === "POST") {
       const b = await readJson(req, 10_000);
       const username = str(b.username, 40).trim(), name = str(b.name, 80).trim();
-      const role = b.role === "admin" ? "admin" : "staff";
+      const role = b.role === "admin" ? "admin" : b.role === "client" ? "client" : "staff";
+      const company = role === "client" ? str(b.company, 80).trim() : "";
       if (!validUsername(username)) return fail(res, 400, "Nome utente: 3–40 tra lettere, numeri o . _ @ -");
       if (!name) return fail(res, 400, "Inserisci il nome della persona.");
+      if (role === "client" && !company) return fail(res, 400, "Inserisci il nome del cliente.");
       if (!validPassword(b.password)) return fail(res, 400, "La password deve avere almeno 8 caratteri.");
       if (q.userByName.get(username)) return fail(res, 409, "Questo nome utente è già in uso.");
       const id = crypto.randomUUID();
       q.insertUser.run(id, username, name, hashPassword(b.password), role, Date.now());
+      if (company) db.prepare("UPDATE users SET company = ?, client_name = ? WHERE id = ?").run(company, company, id);
       writeAudit(user, "account.add", { info: { target: name, role } });
       return send(res, 200, { ok: true, id });
     }
@@ -716,7 +861,16 @@ async function route(req, res) {
         if (target.id !== user.id) q.deleteUserSessions.run(target.id);
         writeAudit(user, "account.password", { info: tgt });
       }
-      if ((b.role === "admin" || b.role === "staff") && b.role !== target.role) {
+      if (b.pending === false && target.pending) {
+        db.prepare("UPDATE users SET pending = 0 WHERE id = ?").run(target.id);
+        writeAudit(user, "account.approve", { info: tgt });
+      }
+      if (typeof b.clientName === "string" && target.role === "client" && str(b.clientName, 80).trim() !== (target.client_name || "")) {
+        const cn = str(b.clientName, 80).trim();
+        db.prepare("UPDATE users SET client_name = ? WHERE id = ?").run(cn || null, target.id);
+        writeAudit(user, "account.client", { info: { ...tgt, client: cn } });
+      }
+      if ((b.role === "admin" || b.role === "staff") && b.role !== target.role && target.role !== "client") {
         db.prepare("UPDATE users SET role = ? WHERE id = ?").run(b.role, target.id);
         writeAudit(user, "account.role", { info: { ...tgt, role: b.role } });
       }
@@ -745,7 +899,7 @@ const server = http.createServer((req, res) => {
   });
 });
 server.listen(PORT, HOST, () => {
-  console.log(`Talent & Crew running on http://localhost:${PORT}  (data in ${DATA_DIR})`);
+  console.log(`Lumia running on http://localhost:${PORT}  (data in ${DATA_DIR})`);
 });
 setInterval(() => q.purgeSessions.run(Date.now()), 3600e3).unref();
 

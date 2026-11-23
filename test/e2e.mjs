@@ -259,6 +259,68 @@ await step("settling", async () => {
   ok("staff get no payment status of jobs", sj.length > 0 && sj.every((k) => !k.includes("invoiceStatus") && !k.includes("crewPaid") && !k.includes("clientPaidAt")), sj[0]);
 });
 
+// ---------- Sign-up, customers and their requests ----------
+await step("sign-up and customers", async () => {
+  const sync403 = (pg) => pg.evaluate(async () => (await fetch("/api/sync", { method: "POST", headers: { "x-tc": "1", "content-type": "application/json" }, body: '{"since":0,"changes":[]}' })).status);
+  const signup = async (kind, name, user, extra) => {
+    const pg = await (await b.newContext(phone)).newPage(); watch(pg, user);
+    await pg.goto(TEAM); await pg.waitForSelector("#login-form:not([hidden])");
+    await pg.click("#go-signup"); await pg.click(`#sg-kind [data-kind="${kind}"]`);
+    await pg.fill("#sg-name", name); await pg.fill("#sg-user", user); await pg.fill("#sg-pass", "password-123"); await pg.fill("#sg-phone", "+39 333 000 1111");
+    await extra(pg); await pg.click("#sg-btn"); await pg.waitForSelector("#portal:not([hidden])"); await pg.waitForTimeout(800);
+    return pg;
+  };
+  const main = (pg) => pg.textContent("#pt-main");
+  const again = async (pg) => { await pg.reload(); await pg.waitForSelector("#portal:not([hidden])"); await pg.waitForTimeout(1200); };
+
+  const cp = await signup("client", "Carla Verdi", "carla@maisonverdi.it", (pg) => pg.fill("#sg-company", "Maison Verdi"));
+  ok("customer signs up and lands in their own area", (await main(cp)).includes("Richiedi persone"));
+  ok("unconfirmed customer sees no existing jobs of that company", !(await main(cp)).includes("Campagna inverno"));
+  ok("customer has no access to the ledger", (await sync403(cp)) === 403);
+  await cp.click("#pt-new"); await cp.waitForSelector("#d-request[open]");
+  await cp.fill("#rq-title", "Shooting primavera"); await cp.fill("#rq-loc", "Via Tortona 27, Milano"); await cp.fill("#rq-call", "09:00"); await cp.fill("#rq-techs", "1");
+  await cp.click('#d-request [type="submit"]'); await cp.waitForSelector("#d-request", hidden); await cp.waitForTimeout(800);
+  ok("request is listed as sent", (await main(cp)).includes("Shooting primavera") && (await main(cp)).includes("Inviata"));
+  await cp.screenshot({ path: OUT + "/16-customer-request.png", fullPage: true });
+
+  await a.goto(ADMIN + "/#calendar"); await a.reload(); await a.waitForSelector('[data-view="calendar"]:not([hidden])'); await synced(a); await a.waitForTimeout(800);
+  ok("office gets a badge for the new request", (await a.textContent("#nav-req")) === "1");
+  await a.click('#cal-seg [data-cv="list"]'); await a.click('#job-seg [data-jv="requests"]'); await a.waitForTimeout(300);
+  ok("office sees the request with who asked", (await a.textContent("#jobs")).includes("Shooting primavera") && (await a.textContent("#jobs")).includes("Carla Verdi"));
+  await a.screenshot({ path: OUT + "/17-office-requests.png" });
+  await a.click('[data-act="req-accept"]'); await a.waitForSelector("#d-jobform[open]");
+  ok("job form is filled from the request", (await a.inputValue("#jf-client")) === "Maison Verdi" && (await a.inputValue("#jf-name")) === "Shooting primavera" && (await a.inputValue("#jf-call")) === "09:00");
+  await a.check(`#jf-people input[value="${ids["Luca Bianchi"]}"]`); await a.check(`#jf-people input[value="${ids["Martina Rossi"]}"]`);
+  await a.click('#d-jobform [type="submit"]'); await a.waitForSelector("#d-jobform", hidden); await synced(a); await a.waitForTimeout(600);
+  ok("request is now accepted on the office side", (await a.textContent("#jobs")).includes("Accettata") && (await a.locator('[data-act="req-accept"]').count()) === 0);
+  await again(cp);
+  ok("customer sees the people sent", (await main(cp)).includes("Luca Bianchi") && (await main(cp)).includes("Martina Rossi") && (await main(cp)).includes("Tecnico"));
+  ok("customer sees it is not paid yet", (await main(cp)).includes("Non ancora fatturato"));
+  ok("customer gets no rates or hours", !(await cp.evaluate(async () => JSON.stringify(await (await fetch("/api/client/overview")).json()))).match(/"rate"|dayRate|"hours"|crewPaid|clientRate/));
+
+  await a.click('#job-seg [data-jv="list"]'); await a.waitForTimeout(300); await a.click('.jcard:has-text("Shooting primavera")'); await a.waitForSelector("#d-job[open]");
+  await a.click('.settle [data-act="job-inv"][data-v="paid"]'); await a.waitForTimeout(500); await a.keyboard.press("Escape"); await synced(a);
+  await again(cp);
+  ok("office marks the customer's payment: customer sees paid", (await main(cp)).includes("Pagato"));
+
+  await a.goto(ADMIN + "/#settings"); await a.reload(); await a.waitForSelector('[data-act="confirm-client"]');
+  ok("office sees the sign-up to confirm", (await a.textContent("#acct-list")).includes("Cliente da confermare"));
+  await a.click('[data-act="confirm-client"]'); await a.waitForTimeout(1200);
+  await again(cp);
+  ok("confirmed customer also sees the company's other jobs", (await main(cp)).includes("Campagna inverno"));
+  await cp.screenshot({ path: OUT + "/18-customer-jobs.png", fullPage: true });
+
+  const sp = await signup("staff", "Nadia Colombo", "nadia.colombo", (pg) => pg.selectOption("#sg-wants", "technician"));
+  ok("new staff sign-up waits for approval", (await main(sp)).includes("Iscrizione ricevuta") && (await sync403(sp)) === 403);
+  await a.reload(); await a.waitForSelector('[data-act="approve-signup"]');
+  await a.click('[data-act="approve-signup"]'); await a.waitForSelector('.acct:has(.nm:has-text("Nadia Colombo")) select[data-link]', { timeout: 15000 });
+  ok("approving adds them to the team and links the login", (await a.$eval('.acct:has(.nm:has-text("Nadia Colombo")) select[data-link]', (e) => e.selectedOptions[0].textContent)) === "Nadia Colombo");
+  await sp.click("#pt-check"); await sp.waitForSelector("#app:not([hidden])"); await sp.waitForTimeout(1500);
+  ok("approved staff gets their own page", (await sp.textContent('[data-view="me"]')).includes("NADIA COLOMBO") || (await sp.textContent('[data-view="me"]')).includes("Nadia Colombo"));
+  const sr = await sp.evaluate(async () => (await (await fetch("/api/sync", { method: "POST", headers: { "x-tc": "1", "content-type": "application/json" }, body: '{"since":0,"changes":[]}' })).json()).records.filter((r) => r.c === "requests" && !r.data.deleted).length);
+  ok("staff never receive customer requests", sr === 0, sr);
+});
+
 console.log("errors:", errors.length ? errors : "none");
 const passed = results.filter((r) => r[0] === "PASS").length;
 console.log(`${passed}/${results.length} passed`);

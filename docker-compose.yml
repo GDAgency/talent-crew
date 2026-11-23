@@ -1,0 +1,25 @@
+# Lumia on any server with Docker:
+#
+#   cp .env.example .env      # set the two site addresses and a setup code
+#   docker compose up -d --build
+#
+# The app listens on port 3000 (change PORT_ON_HOST in .env). Put it behind your
+# HTTPS reverse proxy or tunnel and point both site addresses at it.
+# Everything it stores (database, receipt photos, daily backups) is in ./data: back that up.
+services:
+  app:
+    build: .
+    image: lumia:latest
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATA_DIR: /data
+    ports:
+      - "${PORT_ON_HOST:-3000}:3000"
+    volumes:
+      - ./data:/data
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

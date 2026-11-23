@@ -75,8 +75,8 @@
   const meta = { get: async (k) => (await idb.get("meta", k))?.v, set: (k, v) => idb.put("meta", { k, v }) };
 
   // ---------- State ----------
-  const COLLS = ["people", "shifts", "payments", "receipts", "jobs", "places"];
-  const state = { people: [], shifts: [], payments: [], receipts: [], jobs: [], places: [], settings: { currency: "EUR" } };
+  const COLLS = ["people", "shifts", "payments", "receipts", "jobs", "places", "requests"];
+  const state = { people: [], shifts: [], payments: [], receipts: [], jobs: [], places: [], requests: [], settings: { currency: "EUR" } };
   const ui = { tab: "team", role: "all", q: "", hPerson: "", hMonth: isoMonth(), rStatus: "pending", rPerson: "", pPerson: "", rCat: "", qSel: new Set(), actPerson: "", actUser: "" };
   let me = null;
   let pendingKeys = new Set();        // records with changes not yet on the server
@@ -182,7 +182,7 @@
 
   let syncAgain = false;
   async function runSync() {
-    if (!me || sync.authLost) return;
+    if (!me || sync.authLost || usesPortal(me)) return;
     if (sync.busy) { syncAgain = true; return; }
     sync.busy = true; syncAgain = false; paintSync();
     try {
@@ -366,6 +366,7 @@
     if (!location.hash.slice(1) && ((ui.tab === "team" && staffMe()) || (ui.tab !== "calendar" && isAdmin()))) return route(); // the first sync just linked this login
     const bal = balances();
     const recOpen = state.receipts.filter((r) => r.status !== "reimbursed" && bal.has(r.personId));
+    const navReq = $("#nav-req"), nReq = isAdmin() ? openRequests().length : 0; navReq.textContent = nReq; navReq.hidden = !nReq;
     const navRec = $("#nav-rec"); navRec.textContent = recOpen.length; navRec.hidden = !recOpen.length;
     const waiting = isAdmin() ? pendingShifts().length : 0;
     const navHrs = $("#nav-hrs"); navHrs.textContent = waiting; navHrs.hidden = !waiting; navHrs.title = `${waiting} in attesa di approvazione`;
@@ -655,12 +656,16 @@
         <div class="view-head"><div><h2>Accessi della squadra</h2><p>I collaboratori possono registrare ore, aggiungere ricevute e segnalare la posizione. Gli amministratori gestiscono anche persone, tariffe e pagamenti.</p></div>
           <div class="view-actions"><button class="btn primary" type="button" data-act="add-account">Aggiungi accesso</button></div></div>
         <div id="acct-list">${accountsErr ? `<p class="err">${esc(accountsErr)}</p>` : !accounts ? `<p class="muted">Caricamento…</p>` : accounts.map((a) => `<div class="acct">
-          <div><div class="nm">${esc(a.name)} ${a.disabled ? `<span class="pill over">Disattivato</span>` : ""}</div><div class="un">${esc(a.username)} · ${a.role === "admin" ? "Amministratore" : "Collaboratore"}</div></div>
+          <div><div class="nm">${esc(a.name)} ${a.disabled ? `<span class="pill over">Disattivato</span>` : ""}${a.pending && !a.disabled ? ` <span class="pill owed">Nuova iscrizione</span>` : ""}${a.role === "client" && !a.clientName && !a.disabled ? ` <span class="pill owed">Cliente da confermare</span>` : ""}</div><div class="un">${esc(a.username)} · ${a.role === "admin" ? "Amministratore" : a.role === "client" ? `Cliente${a.company ? " · " + esc(a.company) : ""}` : `Collaboratore${a.pending ? ` · ${roleLabel(a.wants)}` : ""}`}${a.phone ? " · " + esc(a.phone) : ""}</div></div>
           <div class="ctl">
-            <label class="link-sel"><span>È</span><select data-link="${a.id}" aria-label="Persona della squadra per ${esc(a.name)}"><option value="">Non in squadra</option>${state.people.slice().sort(byName).map((p) => `<option value="${p.id}" ${a.personId === p.id ? "selected" : ""}>${esc(p.name)}</option>`).join("")}</select></label>
+            ${a.role === "client" ? `<label class="link-sel"><span>Cliente</span><input class="client-link" data-client="${a.id}" list="jf-clients" value="${esc(a.clientName || "")}" placeholder="${esc(a.company || "Nome cliente")}" aria-label="Cliente di ${esc(a.name)}"></label>
+            ${!a.clientName && a.company ? `<button class="btn sm primary" type="button" data-act="confirm-client" data-id="${a.id}">Conferma ${esc(a.company)}</button>` : ""}
+            <button class="btn sm" type="button" data-act="reset-pw" data-id="${a.id}">Reimposta password</button>
+            <button class="btn sm ${a.disabled ? "" : "danger"}" type="button" data-act="toggle-disabled" data-id="${a.id}">${a.disabled ? "Riattiva" : "Disattiva"}</button>` : a.pending ? `<button class="btn sm primary" type="button" data-act="approve-signup" data-id="${a.id}">Approva e aggiungi alla squadra</button>
+            <button class="btn sm ${a.disabled ? "" : "danger"}" type="button" data-act="toggle-disabled" data-id="${a.id}">${a.disabled ? "Riattiva" : "Rifiuta"}</button>` : `<label class="link-sel"><span>È</span><select data-link="${a.id}" aria-label="Persona della squadra per ${esc(a.name)}"><option value="">Non in squadra</option>${state.people.slice().sort(byName).map((p) => `<option value="${p.id}" ${a.personId === p.id ? "selected" : ""}>${esc(p.name)}</option>`).join("")}</select></label>
             <button class="btn sm" type="button" data-act="reset-pw" data-id="${a.id}">Reimposta password</button>
             ${a.id === me.id ? "" : `<button class="btn sm" type="button" data-act="toggle-role" data-id="${a.id}">${a.role === "admin" ? "Rendi collaboratore" : "Rendi amministratore"}</button>
-            <button class="btn sm ${a.disabled ? "" : "danger"}" type="button" data-act="toggle-disabled" data-id="${a.id}">${a.disabled ? "Riattiva" : "Disattiva"}</button>`}
+            <button class="btn sm ${a.disabled ? "" : "danger"}" type="button" data-act="toggle-disabled" data-id="${a.id}">${a.disabled ? "Riattiva" : "Disattiva"}</button>`}`}
           </div></div>`).join("")}</div>
       </section>
       ${placesPanel()}
@@ -1150,17 +1155,18 @@
     $("#af-name-wrap").hidden = $("#af-user-wrap").hidden = $("#af-role-wrap").hidden = reset;
     $("#af-pass-lbl").textContent = reset ? "Nuova password" : "Password";
     $("#af-btn").textContent = reset ? "Imposta password" : "Crea accesso";
-    $("#af-name").value = ""; $("#af-user").value = ""; $("#af-role").value = "staff";
+    $("#af-name").value = ""; $("#af-user").value = ""; $("#af-role").value = "staff"; $("#af-company").value = ""; $("#af-company-wrap").hidden = true;
     $("#af-pass").value = [...crypto.getRandomValues(new Uint8Array(6))].map((b) => "abcdefghjkmnpqrstuvwxyz23456789"[b % 31]).join("") + "-" + [...crypto.getRandomValues(new Uint8Array(4))].map((b) => "23456789"[b % 8]).join("");
     showErr($("#af-err"), "");
     openSheet("#d-account");
   }
+  $("#af-role").addEventListener("change", () => { $("#af-company-wrap").hidden = $("#af-role").value !== "client" || acctMode?.mode === "reset"; });
   $("#d-account form").addEventListener("submit", (e) => {
     e.preventDefault();
     const err = $("#af-err");
     attempt(e.currentTarget, err, async () => {
       if (acctMode.mode === "reset") await api("/api/users/" + acctMode.id, { body: { password: $("#af-pass").value } });
-      else await api("/api/users", { body: { name: $("#af-name").value.trim(), username: $("#af-user").value.trim(), role: $("#af-role").value, password: $("#af-pass").value } });
+      else await api("/api/users", { body: { name: $("#af-name").value.trim(), username: $("#af-user").value.trim(), role: $("#af-role").value, company: $("#af-company").value.trim(), password: $("#af-pass").value } });
       $("#d-account").close(); toast(acctMode.mode === "reset" ? "Password cambiata" : "Accesso creato");
       loadAccounts();
     }).catch(() => {});
@@ -1400,6 +1406,23 @@ ${docCss()}
       case "sync-now": sync.error = null; sync.online = true; return runSync().then(() => renderSettings());
       case "add-account": return openAccount("create");
       case "reset-pw": return openAccount("reset", id);
+      case "confirm-client": { const a = accounts.find((x) => x.id === id); return api("/api/users/" + id, { body: { clientName: a.company } }).then(() => { toast(`${a.name} vede i lavori di ${a.company}`); return loadAccounts(); }).catch((err) => toast(err.msg || "Connettiti a internet per modificare gli accessi.")); }
+      case "approve-signup": {
+        const a = accounts.find((x) => x.id === id); if (!a) return;
+        t.disabled = true;
+        return (async () => {
+          const same = state.people.find((p) => p.name.trim().toLowerCase() === a.name.trim().toLowerCase() && !accounts.some((x) => x.personId === p.id));
+          const person = same || await save("people", { name: a.name, role: a.wants === "technician" ? "technician" : "model", phone: a.phone || "", payType: "hourly", rate: 0 });
+          // The person has to reach the server before the login can be linked to them.
+          for (let i = 0; ; i++) {
+            await runSync();
+            try { await api("/api/users/" + id, { body: { pending: false, personId: person.id } }); break; }
+            catch (err) { if (i >= 6 || err.status !== 400) throw err; await new Promise((r) => setTimeout(r, 700)); }
+          }
+          toast(`${a.name} approvato/a${same ? "" : ": imposta la tariffa in Persone"}`);
+          loadAccounts();
+        })().catch((err) => { toast(err.msg || "Connettiti a internet per approvare."); loadAccounts(); });
+      }
       case "toggle-role": case "toggle-disabled": {
         const a = accounts.find((x) => x.id === id);
         const body = act === "toggle-role" ? { role: a.role === "admin" ? "staff" : "admin" } : { disabled: !a.disabled };
@@ -1693,6 +1716,13 @@ ${docCss()}
       "place.add": `ha salvato il luogo ${esc(i.name || "")}`,
       "place.edit": `ha rinominato un luogo salvato in ${esc(i.name || "")}`,
       "place.delete": `ha rimosso il luogo salvato ${esc(i.name || "")}`,
+      "account.signup": `si è registrato/a come ${i.role === "client" ? `cliente${i.company ? " (" + esc(i.company) + ")" : ""}` : "collaboratore"}`,
+      "account.approve": `ha approvato l'iscrizione di ${T}`,
+      "account.client": i.client ? `ha collegato ${T} al cliente ${esc(i.client)}` : `ha scollegato ${T} dal cliente`,
+      "request.add": `ha chiesto persone per ${esc(i.title || "")}${i.client ? " (" + esc(i.client) + ")" : ""}`,
+      "request.cancel": `ha annullato la richiesta ${esc(i.title || "")}`,
+      "request.accept": `ha accettato la richiesta ${esc(i.title || "")}${i.client ? " di " + esc(i.client) : ""}`,
+      "request.decline": `ha rifiutato la richiesta ${esc(i.title || "")}${i.client ? " di " + esc(i.client) : ""}`,
       "account.add": `ha creato un accesso ${i.role === "admin" ? "amministratore" : "collaboratore"} per ${T}`,
       "account.link": `ha collegato l'accesso di ${T} a ${P}`,
       "account.unlink": `ha scollegato l'accesso di ${T} da ${P}`,
@@ -1725,6 +1755,10 @@ ${docCss()}
     el.innerHTML = html;
   }
   function bindSettingsExtras() {
+    $$("[data-client]").forEach((inp) => inp.addEventListener("change", async () => {
+      try { await api("/api/users/" + inp.dataset.client, { body: { clientName: inp.value.trim() } }); toast(inp.value.trim() ? `Vede i lavori di ${inp.value.trim()}` : "Cliente scollegato"); loadAccounts(); }
+      catch (err) { toast(err.msg || "Connettiti a internet per modificare gli accessi."); }
+    }));
     $$("[data-link]").forEach((sel) => sel.addEventListener("change", async () => {
       const id = sel.dataset.link, personId = sel.value || null;
       try {
@@ -1868,6 +1902,8 @@ ${docCss()}
     const el = $("#jobs");
     if (!isAdmin()) jui.view = "list";
     $$("#job-seg button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.jv === jui.view)));
+    const nReq = openRequests().length; $('#job-seg [data-jv="requests"]').textContent = nReq ? `Richieste · ${nReq}` : "Richieste";
+    if (jui.view === "requests") return renderRequests(el);
     if (!state.jobs.length) {
       el.innerHTML = isAdmin()
         ? empty("Ancora nessun lavoro prenotato", "Aggiungi un lavoro con cliente, data, orario di convocazione e posizione, poi prenota le persone. Compare sulla loro scheda in Persone e nel calendario e le ore si possono registrare direttamente da lì.", "job-add", "Prenota il primo lavoro")
@@ -2021,11 +2057,32 @@ ${docCss()}
     </section>`;
   }
 
+  // Requests from customers (office side): turn one into a job, or decline it.
+  const openRequests = () => (state.requests || []).filter((r) => r.status === "new");
+  let jobFromRequest = null;
+  function renderRequests(el) {
+    const all = (state.requests || []).slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    const card = (r) => {
+      const [label, cls] = REQ_STATUS[r.status] || REQ_STATUS.new, j = r.jobId && state.jobs.find((x) => x.id === r.jobId);
+      return `<article class="pt-card">
+        <div class="pt-card-h"><div><span class="eyebrow">${esc(r.clientName || "Cliente")}</span><h3>${esc(r.title)}</h3><p>${whenText(r)}${r.location ? ` · ${esc(r.location)}` : ""}</p></div><span class="pill ${cls}">${r.status === "new" ? "Da gestire" : label}</span></div>
+        <p class="pt-need">${needText(r)}${r.notes ? ` · ${esc(r.notes)}` : ""}</p>
+        <p class="muted">Da ${esc(r.contact || "")}${r.phone ? ` · ${esc(r.phone)}` : ""} · ${ago(r.createdAt)}</p>
+        <div class="pt-acts">${r.status === "new" ? `<button class="btn sm primary" type="button" data-act="req-accept" data-id="${r.id}">${ICON.plus || ""}Crea lavoro</button><button class="btn sm danger" type="button" data-act="req-decline" data-id="${r.id}">Non disponibile</button>`
+          : j ? `<button class="btn sm" type="button" data-act="job-open" data-id="${j.id}">Apri il lavoro</button>` : r.status === "declined" ? `<button class="btn quiet sm" type="button" data-act="req-reopen" data-id="${r.id}">Riapri</button>` : ""}</div>
+      </article>`;
+    };
+    const open = all.filter((r) => r.status === "new"), rest = all.filter((r) => r.status !== "new");
+    el.innerHTML = all.length ? `${open.length ? open.map(card).join("") : `<p class="totals-line">Nessuna richiesta da gestire.</p>`}${rest.length ? `<h4 class="eyebrow pt-h">Già gestite · ${rest.length}</h4>${rest.map(card).join("")}` : ""}`
+      : empty("Nessuna richiesta", "Quando un cliente registrato chiede delle persone, la richiesta arriva qui: con un tocco diventa un lavoro.");
+  }
+
   // Job form (admins)
   function openJob(id, day, call, pid) {
     if (!isAdmin()) return;
     editingJob = id || null;
-    const j = state.jobs.find((x) => x.id === id) || (day ? { date: day, call: call || "", wrap: call ? fmtMin(Math.min(1439, toMin(call) + 480)) : "", people: pid ? [pid] : [] } : {});
+    if (!(day && typeof day === "object")) jobFromRequest = null;
+    const j = state.jobs.find((x) => x.id === id) || (day && typeof day === "object" ? day : day ? { date: day, call: call || "", wrap: call ? fmtMin(Math.min(1439, toMin(call) + 480)) : "", people: pid ? [pid] : [] } : {});
     $("#jf-title").textContent = id ? "Modifica lavoro" : "Nuovo lavoro";
     $("#jf-client").value = j.client || ""; $("#jf-name").value = j.title || "";
     $("#jf-date").value = j.date || isoDay(); $("#jf-end").value = j.endDate || ""; $("#jf-call").value = j.call || ""; $("#jf-wrap").value = j.wrap || "";
@@ -2072,7 +2129,11 @@ ${docCss()}
         notes: $("#jf-notes").value.trim(), people: [...pickedPeople()], billing,
         fee: billing === "flat" ? round2(amt) : Number(prev?.fee) || 0, clientRate: billing === "hourly" ? round2(amt) : Number(prev?.clientRate) || 0,
         invoiceStatus: $("#jf-inv").value, clientPaidAt: $("#jf-inv").value === "paid" ? prev?.clientPaidAt || isoDay() : "",
+        ...(!prev && jobFromRequest ? { requestId: jobFromRequest } : {}),
       });
+      const rq = !prev && jobFromRequest && state.requests.find((x) => x.id === jobFromRequest);
+      if (rq) await save("requests", { ...rq, status: "accepted", jobId: rec.id });
+      jobFromRequest = null;
       $("#d-jobform").close();
       toast(prev ? "Lavoro salvato" : `${jobName(rec)} prenotato${sync.online ? "" : " · salvato su questo dispositivo"}`);
     });
@@ -2153,6 +2214,14 @@ ${docCss()}
         return save("jobs", { ...j, invoiceStatus: t.dataset.v, clientPaidAt: paid ? isoDay() : "" }).then(() => toast(paid ? "Il cliente ha pagato: segnato" : `Segnato come ${INV[t.dataset.v].toLowerCase()}`));
       }
       case "job-pay": return openPay(t.dataset.person, id);
+      case "req-accept": {
+        const r = state.requests.find((x) => x.id === id); if (!r || !isAdmin()) return;
+        jobFromRequest = r.id;
+        return openJob(null, { client: r.clientName || "", title: r.title, date: r.date, endDate: r.endDate, call: r.call, wrap: r.wrap, location: r.location,
+          notes: [`Richiesta: ${needText(r)}`, r.notes, r.contact ? `Contatto: ${r.contact}${r.phone ? " " + r.phone : ""}` : ""].filter(Boolean).join("\n"), people: [] });
+      }
+      case "req-decline": return armed(t, "Conferma", async () => { const r = state.requests.find((x) => x.id === id); if (r) { await save("requests", { ...r, status: "declined" }); toast("Richiesta rifiutata: il cliente lo vede"); } });
+      case "req-reopen": { const r = state.requests.find((x) => x.id === id); return r && save("requests", { ...r, status: "new" }); }
       case "job-mark": case "job-unmark": {
         const j = state.jobs.find((x) => x.id === id), pid = t.dataset.person;
         if (!j || !isAdmin() || j.archived) return;
@@ -2515,9 +2584,9 @@ ${docCss()}
   let reauth = false;
   function showAuth(mode, isReauth = false) {
     reauth = isReauth;
-    $("#app").hidden = true; $("#auth").hidden = false;
-    $("#login-form").hidden = mode !== "login"; $("#setup-form").hidden = mode !== "setup";
-    (mode === "login" ? $("#li-user") : $("#su-name")).focus();
+    $("#app").hidden = true; $("#portal").hidden = true; $("#auth").hidden = false;
+    $("#login-form").hidden = mode !== "login"; $("#setup-form").hidden = mode !== "setup"; $("#signup-form").hidden = mode !== "signup";
+    (mode === "login" ? $("#li-user") : mode === "signup" ? $("#sg-name") : $("#su-name")).focus();
   }
   async function enter(user) {
     const prev = await meta.get("me");
@@ -2525,7 +2594,8 @@ ${docCss()}
     else if (prev && prev.role !== user.role) await meta.set("rev", 0); // role changed: re-fetch (staff copies of jobs carry no billing)
     me = user; await meta.set("me", user);
     sync.authLost = false;
-    $("#auth").hidden = true; $("#app").hidden = false;
+    if (usesPortal(user)) return showPortal(user);
+    $("#auth").hidden = true; $("#portal").hidden = true; $("#app").hidden = false;
     $("#me-chip").innerHTML = `<div><b>${esc(user.name)}</b>${user.role === "admin" ? "Amministratore" : "Collaboratore"}</div>`;
     navigator.storage?.persist?.().catch(() => {});
     loadAccounts();
@@ -2564,6 +2634,117 @@ ${docCss()}
     else go();
   }
 
+  // ---------- Customers (and people waiting for approval) ----------
+  // Customers never get the ledger: this screen talks to its own small API, online only.
+  const usesPortal = (u) => !!u && (u.role === "client" || (u.role === "staff" && u.pending));
+  const REQ_STATUS = { new: ["Inviata", "wait"], accepted: ["Accettata", "paid"], declined: ["Non disponibile", "over"], cancelled: ["Annullata", "wait"] };
+  const needText = (r) => [r.models ? `${r.models} ${r.models === 1 ? "modello/a" : "modelli/e"}` : "", r.technicians ? `${r.technicians} ${r.technicians === 1 ? "tecnico" : "tecnici"}` : ""].filter(Boolean).join(" · ");
+  const whenText = (x) => `${fmtShort(x.date)}${x.endDate && x.endDate > x.date ? ` – ${fmtShort(x.endDate)}` : ""}${x.call ? ` · ${esc(x.call)}${x.wrap ? "–" + esc(x.wrap) : ""}` : ""}`;
+  let portalData = null;
+  function showPortal(user) {
+    me = user;
+    $("#auth").hidden = true; $("#app").hidden = true; $("#portal").hidden = false;
+    $("#pt-name").textContent = user.name;
+    $("#pt-kind").textContent = user.role === "client" ? "Clienti" : "Squadra";
+    if (user.role === "client") loadPortal(); else paintWaiting();
+  }
+  function paintWaiting() {
+    $("#pt-main").innerHTML = `<section class="panel pt-wait"><h1>Iscrizione ricevuta</h1>
+      <p>Grazie, ${esc(me.name.split(" ")[0])}. L'ufficio deve approvare la tua iscrizione: appena lo fa, qui trovi il tuo calendario, le tue ore e le tue ricevute.</p>
+      <div><button class="btn primary" type="button" id="pt-check">Controlla di nuovo</button></div></section>`;
+    $("#pt-check").addEventListener("click", async (e) => {
+      e.currentTarget.disabled = true;
+      try { const r = await api("/api/me", { method: "GET" }); if (!usesPortal(r.user)) return enter(r.user); toast("Non ancora approvata. Riprova più tardi."); }
+      catch (x) { toast(x.status ? x.msg : "Nessuna connessione."); }
+      paintWaiting();
+    });
+  }
+  async function loadPortal() {
+    const el = $("#pt-main");
+    if (!portalData) el.innerHTML = `<p class="muted">Caricamento…</p>`;
+    try { portalData = await api("/api/client/overview", { method: "GET" }); }
+    catch (x) {
+      if (x.status === 401) return showAuth("login");
+      if (!portalData) { el.innerHTML = `<section class="panel"><p>${esc(x.status ? x.msg : "Nessuna connessione. Riprova quando sei online.")}</p><div><button class="btn" type="button" id="pt-retry">Riprova</button></div></section>`; $("#pt-retry").addEventListener("click", loadPortal); return; }
+    }
+    paintPortal();
+  }
+  function paintPortal() {
+    const d = portalData, today = isoDay();
+    if (d.currency) state.settings = { ...state.settings, currency: d.currency };
+    const jobEndOf = (j) => (j.endDate && j.endDate > j.date ? j.endDate : j.date);
+    const job = (j) => {
+      const pay = j.payment === "paid" ? `<span class="pill paid">Pagato${j.paidAt ? ` · ${fmtShort(j.paidAt)}` : ""}</span>` : j.payment === "invoiced" ? `<span class="pill owed">Fattura da pagare</span>` : `<span class="pill wait">Non ancora fatturato</span>`;
+      return `<article class="pt-card">
+        <div class="pt-card-h"><div><h3>${esc(j.title || j.client || "Lavoro")}</h3><p>${whenText(j)}${j.location ? ` · ${esc(j.location)}` : ""}</p></div><div class="pt-pay">${j.fee ? `<b class="mono">${money(j.fee)}</b>` : ""}${pay}</div></div>
+        ${j.people.length ? `<ul class="pt-people">${j.people.map((p) => `<li><b>${esc(p.name)}</b><span>${roleLabel(p.role)}${p.speciality ? " · " + esc(p.speciality) : ""}</span></li>`).join("")}</ul>` : `<p class="muted">L'ufficio sta ancora scegliendo le persone.</p>`}
+      </article>`;
+    };
+    const req = (r) => {
+      const [label, cls] = REQ_STATUS[r.status] || REQ_STATUS.new;
+      return `<article class="pt-card">
+        <div class="pt-card-h"><div><h3>${esc(r.title)}</h3><p>${whenText(r)}${r.location ? ` · ${esc(r.location)}` : ""}</p></div><span class="pill ${cls}">${label}</span></div>
+        <p class="pt-need">${needText(r)}${r.notes ? ` · ${esc(r.notes)}` : ""}</p>
+        ${r.status === "declined" && r.reply ? `<p class="muted">Risposta dell'ufficio: ${esc(r.reply)}</p>` : ""}
+        ${r.status === "new" ? `<div><button class="btn sm" type="button" data-cancel="${r.id}">Annulla richiesta</button></div>` : ""}
+      </article>`;
+    };
+    const coming = d.jobs.filter((j) => jobEndOf(j) >= today).reverse(), past = d.jobs.filter((j) => jobEndOf(j) < today);
+    const open = d.requests.filter((r) => r.status === "new"), answered = d.requests.filter((r) => r.status !== "new" && !(r.status === "accepted" && d.jobs.some((j) => j.requestId === r.id)));
+    $("#pt-main").innerHTML = `
+      <div class="view-head"><div><h1>Ciao, ${esc(me.name.split(" ")[0])}</h1><p>${esc(me.clientName || me.company || "")}</p></div>
+        <div class="view-actions"><button class="btn primary" type="button" id="pt-new">${ICON.plus || ""}Richiedi persone</button></div></div>
+      <h2 class="pt-h">Persone inviate${coming.length ? ` · ${coming.length}` : ""}</h2>
+      ${coming.length ? coming.map(job).join("") : `<p class="muted pt-empty">Nessun lavoro in programma. Quando l'ufficio accetta una richiesta, qui vedi chi viene, quando e dove.</p>`}
+      <h2 class="pt-h">Richieste in attesa${open.length ? ` · ${open.length}` : ""}</h2>
+      ${open.length ? open.map(req).join("") : `<p class="muted pt-empty">Nessuna richiesta in attesa.</p>`}
+      ${answered.length ? `<h2 class="pt-h">Altre richieste</h2>${answered.map(req).join("")}` : ""}
+      ${past.length ? `<h2 class="pt-h">Lavori passati · ${past.length}</h2>${past.map(job).join("")}` : ""}`;
+    $("#pt-new").addEventListener("click", () => {
+      for (const id of ["rq-title", "rq-end", "rq-call", "rq-wrap", "rq-loc", "rq-notes"]) $("#" + id).value = "";
+      $("#rq-date").value = addDays(today, 7); $("#rq-date").min = today; $("#rq-models").value = 1; $("#rq-techs").value = 0;
+      showErr($("#rq-err"), ""); openSheet("#d-request");
+    });
+    $$("#pt-main [data-cancel]").forEach((b) => b.addEventListener("click", () => armed(b, "Tocca di nuovo per annullare", async () => {
+      try { await api(`/api/client/requests/${b.dataset.cancel}/cancel`, {}); toast("Richiesta annullata"); } catch (x) { toast(x.status ? x.msg : "Nessuna connessione."); }
+      loadPortal();
+    })));
+  }
+  $("#d-request form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    attempt(e.currentTarget, $("#rq-err"), async () => {
+      await api("/api/client/requests", { body: { title: $("#rq-title").value.trim(), date: $("#rq-date").value, endDate: $("#rq-end").value, call: $("#rq-call").value, wrap: $("#rq-wrap").value,
+        location: $("#rq-loc").value.trim(), models: $("#rq-models").value, technicians: $("#rq-techs").value, notes: $("#rq-notes").value.trim() } });
+      $("#d-request").close(); toast("Richiesta inviata all'ufficio");
+      loadPortal();
+    }).catch(() => {});
+  });
+  $("#pt-out").addEventListener("click", () => logout());
+  $("#pt-pass").addEventListener("click", () => { $("#cp-cur").value = ""; $("#cp-new").value = ""; showErr($("#cp-err"), ""); openSheet("#d-password"); });
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && me?.role === "client" && !$("#portal").hidden && !$$("dialog[open]").length) loadPortal(); });
+
+  // ---------- Sign up ----------
+  let sgKind = "staff";
+  function paintSignup() {
+    $$("#sg-kind button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.kind === sgKind)));
+    $("#sg-company-wrap").hidden = sgKind !== "client"; $("#sg-wants-wrap").hidden = sgKind !== "staff";
+    $("#sg-sub").textContent = sgKind === "client" ? "Per le aziende: richiedi modelli/e e tecnici e vedi chi ti viene inviato." : "Per modelli/e e tecnici. L'ufficio approva l'iscrizione prima che tu possa entrare.";
+  }
+  $("#sg-kind").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) { sgKind = b.dataset.kind; paintSignup(); } });
+  $("#go-signup").addEventListener("click", (e) => { e.preventDefault(); paintSignup(); showErr($("#sg-err"), ""); showAuth("signup"); });
+  $("#go-login").addEventListener("click", (e) => { e.preventDefault(); showAuth("login"); });
+  $("#signup-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const err = $("#sg-err"), btn = $("#sg-btn");
+    showErr(err, ""); btn.disabled = true;
+    try {
+      const r = await api("/api/signup", { body: { kind: sgKind, name: $("#sg-name").value.trim(), company: $("#sg-company").value.trim(), wants: $("#sg-wants").value, phone: $("#sg-phone").value.trim(), username: $("#sg-user").value.trim(), password: $("#sg-pass").value } });
+      $("#sg-pass").value = "";
+      await enter(r.user);
+    } catch (x) { showErr(err, x.status ? x.msg : "Nessuna connessione. Devi essere online per registrarti."); }
+    finally { btn.disabled = false; }
+  });
+
   // ---------- Boot ----------
   window.addEventListener("online", () => { sync.online = true; kickSync(0); });
   window.addEventListener("offline", () => { sync.online = false; paintSync(); });
@@ -2587,10 +2768,12 @@ ${docCss()}
       $("#li-sub").textContent = "Per gli amministratori dell'agenzia: persone, tariffe, lavori e pagamenti.";
       if (site.clientUrl) { other.hidden = false; other.innerHTML = `Modello/a o tecnico? Accedi su <a href="${esc(site.clientUrl)}">${esc(host(site.clientUrl))}</a>`; }
     } else if (site.site === "client") {
-      $("#auth-site").textContent = "Squadra";
+      $("#auth-site").textContent = "Squadra e clienti";
+      $("#li-sub").textContent = "Per chi lavora con l'agenzia e per i clienti.";
       if (site.adminUrl) { other.hidden = false; other.innerHTML = `Amministratore dell'agenzia? Usa <a href="${esc(site.adminUrl)}">${esc(host(site.adminUrl))}</a>`; }
     }
     $("#su-code-wrap").hidden = !site.setupCode;
+    $("#li-signup").hidden = !site.signups;
   }
 
   async function boot() {
@@ -2613,6 +2796,7 @@ ${docCss()}
       throw new Error("server " + r.status);
     } catch {
       // Offline (or server unreachable): open with what's on this device.
+      if (cached && usesPortal(cached)) return showPortal(cached);
       if (cached) { sync.online = false; me = cached; $("#auth").hidden = true; $("#app").hidden = false;
         $("#me-chip").innerHTML = `<div><b>${esc(cached.name)}</b>${cached.role === "admin" ? "Amministratore" : "Collaboratore"}</div>`;
         route(); return; }

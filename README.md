@@ -7,6 +7,28 @@ It's one web address that works two ways:
 - **Website**: open it in any browser on a computer.
 - **App**: on a phone, "Add to Home Screen" (iPhone) or "Install app" (Android). It then opens full-screen like a normal app and **works without signal**. Hours, location check-ins and receipt photos are saved on the phone and sent to the server automatically when it's back online.
 
+## Deploy on a server (Docker)
+
+```
+git clone https://github.com/GDAgency/talent-crew.git lumia && cd lumia
+cp .env.example .env        # set ADMIN_HOSTS, CLIENT_HOSTS and SETUP_CODE
+docker compose up -d --build
+```
+
+- The app listens on port 3000. Put it behind an HTTPS reverse proxy or tunnel and point both addresses at it. The container needs to own `./data` (`sudo chown -R 1000:1000 data` if it can't write).
+- Open the office address (`ADMIN_HOSTS`) and create the first administrator with the setup code.
+- There is no separate database to install: everything is in `./data` (`ledger.db`, receipt photos, daily backups). To move an existing installation, stop the app and copy its `data` folder.
+- Update: `git pull && docker compose up -d --build`. Older databases are upgraded on start.
+- No Docker: `DATA_DIR=./data ADMIN_HOSTS=… CLIENT_HOSTS=… node server/server.js` with Node 22.5 or newer; there are no dependencies to install.
+
+## Sign-up, customers and requests
+
+- On the public site anyone can register (`SIGNUPS=off` closes it), as someone who works with the agency or as a customer.
+- **People who work with the agency** wait for the office: until an administrator approves them in Impostazioni → Accessi della squadra, they see nothing. Approving adds them to Persone and links their login.
+- **Customers** can ask for people straight away (what for, when, where, how many models and technicians). Requests arrive in Calendario → Lavori → Richieste; "Crea lavoro" turns one into a job, and the customer then sees who is sent, when and where, and whether the job is paid.
+- A customer sees jobs created from their own requests. To also show them the other jobs under a client name, an administrator confirms which client the account belongs to (Accessi della squadra). Customers never see rates, hours or the rest of the ledger.
+- The office marks a customer's payment on the job ("Il cliente ci ha pagato?" → Ha pagato).
+
 ## Who can do what
 
 | | Staff | Admin |

@@ -7,13 +7,18 @@
 //   docker build -t talent-crew:qa .
 //   docker run -d --rm --name tc-qa -p 127.0.0.1:3931:3000 -e CLIENT_HOSTS=localhost -e ADMIN_HOSTS=127.0.0.1 -e SETUP_CODE=qa talent-crew:qa
 //   ADMIN_URL=http://127.0.0.1:3931 TEAM_URL=http://localhost:3931 QA_SETUP_CODE=qa node test/e2e.mjs /tmp/tc-shots
+// Office under a path of the same site instead (ADMIN_PATH):
+//   docker run -d --rm --name tc-qa2 -p 127.0.0.1:3932:3000 -e CLIENT_HOSTS=localhost -e ADMIN_PATH=/admin -e SETUP_CODE=qa talent-crew:qa
+//   ADMIN_URL=http://localhost:3932/admin TEAM_URL=http://localhost:3932 QA_SETUP_CODE=qa node test/e2e.mjs /tmp/tc-shots2
 // localhost and 127.0.0.1 count as secure origins, so the service worker runs over plain http.
 import { chromium } from "playwright-core";
 import fs from "node:fs";
 const exe = process.env.CHROME || process.env.HOME + "/.cache/ms-playwright/chromium_headless_shell-1248/chrome-headless-shell-linux64/chrome-headless-shell";
 const ADMIN = process.env.ADMIN_URL, TEAM = process.env.TEAM_URL, CODE = process.env.QA_SETUP_CODE;
 if (!ADMIN || !TEAM || !CODE) { console.error("Set ADMIN_URL, TEAM_URL and QA_SETUP_CODE (see the top of this file)."); process.exit(2); }
-const ADMIN_HOST = new URL(ADMIN).hostname, TEAM_HOST = new URL(TEAM).hostname;
+// What the sign-in screens name each site by: the host, plus the path when the office is under one.
+const label = (u) => new URL(u).hostname + new URL(u).pathname.replace(/\/$/, "");
+const ADMIN_HOST = label(ADMIN), TEAM_HOST = label(TEAM);
 const OUT = process.argv[2] || "e2e-shots"; fs.mkdirSync(OUT, { recursive: true });
 const results = [];
 const ok = (name, cond, got) => { results.push([cond ? "PASS" : "FAIL", name]); console.log(cond ? "PASS" : "FAIL", name, got === undefined ? "" : "→ " + JSON.stringify(got)); };
@@ -48,14 +53,14 @@ await step("office setup", async () => {
   }
   await synced(a);
   ids = await a.evaluate(async () => {
-    const j = await (await fetch("/api/sync", { method: "POST", headers: { "x-tc": "1", "content-type": "application/json" }, body: '{"since":0,"changes":[]}' })).json();
+    const j = await (await fetch("api/sync", { method: "POST", headers: { "x-tc": "1", "content-type": "application/json" }, body: '{"since":0,"changes":[]}' })).json();
     return Object.fromEntries(j.records.filter((r) => r.c === "people").map((r) => [r.data.name, r.id]));
   });
   ok("people saved on server", !!ids["Martina Rossi"] && !!ids["Luca Bianchi"]);
   const staff = await a.evaluate(async (pid) => {
     const h = { "x-tc": "1", "content-type": "application/json" };
-    const r = await (await fetch("/api/users", { method: "POST", headers: h, body: JSON.stringify({ name: "Martina Rossi", username: "qa-martina", password: "qa-staff-pass-1", role: "staff" }) })).json();
-    const l = await fetch("/api/users/" + r.id, { method: "POST", headers: h, body: JSON.stringify({ personId: pid }) });
+    const r = await (await fetch("api/users", { method: "POST", headers: h, body: JSON.stringify({ name: "Martina Rossi", username: "qa-martina", password: "qa-staff-pass-1", role: "staff" }) })).json();
+    const l = await fetch("api/users/" + r.id, { method: "POST", headers: h, body: JSON.stringify({ personId: pid }) });
     return { link: l.status };
   }, ids["Martina Rossi"]);
   ok("staff login created and linked to Martina", staff.link === 200, staff);
@@ -117,8 +122,8 @@ await step("office approvals and pay", async () => {
   const owed = await a.textContent('.comp:has-text("Martina") .figs .v.owed').catch(() => null);
   ok("Martina owed = 13.5 h × €65 + €22.40 receipt = €899.90", !!owed && owed.includes("899,90"), owed);
   const photo = await a.evaluate(async () => {
-    const j = await (await fetch("/api/sync", { method: "POST", headers: { "x-tc": "1", "content-type": "application/json" }, body: '{"since":0,"changes":[]}' })).json();
-    const r = j.records.find((x) => x.c === "receipts"); const res = await fetch("/api/photos/" + r.id); return [r.data.photoUploaded, res.status];
+    const j = await (await fetch("api/sync", { method: "POST", headers: { "x-tc": "1", "content-type": "application/json" }, body: '{"since":0,"changes":[]}' })).json();
+    const r = j.records.find((x) => x.c === "receipts"); const res = await fetch("api/photos/" + r.id); return [r.data.photoUploaded, res.status];
   });
   ok("receipt photo stored on server", photo[0] === true && photo[1] === 200, photo);
   await a.click('.comp:has-text("Martina") [data-act="add-payment"]'); await a.waitForSelector("#d-pay[open]");
@@ -147,7 +152,7 @@ await step("cross-site", async () => {
 
 // ---------- Staff see only their own money ----------
 await step("privacy", async () => {
-  const sync0 = (pg) => pg.evaluate(async () => (await (await fetch("/api/sync", { method: "POST", headers: { "x-tc": "1", "content-type": "application/json" }, body: '{"since":0,"changes":[]}' })).json()).records);
+  const sync0 = (pg) => pg.evaluate(async () => (await (await fetch("api/sync", { method: "POST", headers: { "x-tc": "1", "content-type": "application/json" }, body: '{"since":0,"changes":[]}' })).json()).records);
   const sr = await sync0(s), ar = await sync0(a);
   const live = (rs, c) => rs.filter((r) => r.c === c && !r.data.deleted);
   const luca = ids["Luca Bianchi"], martina = ids["Martina Rossi"];
@@ -255,13 +260,13 @@ await step("settling", async () => {
   await a.click('#job-seg [data-jv="list"]'); await a.waitForTimeout(300);
   ok("restoring brings it back", (await a.locator(card).count()) === 1);
   await synced(a); await s.waitForTimeout(500);
-  const sj = await s.evaluate(async () => (await (await fetch("/api/sync", { method: "POST", headers: { "x-tc": "1", "content-type": "application/json" }, body: '{"since":0,"changes":[]}' })).json()).records.filter((r) => r.c === "jobs").map((r) => Object.keys(r.data)));
+  const sj = await s.evaluate(async () => (await (await fetch("api/sync", { method: "POST", headers: { "x-tc": "1", "content-type": "application/json" }, body: '{"since":0,"changes":[]}' })).json()).records.filter((r) => r.c === "jobs").map((r) => Object.keys(r.data)));
   ok("staff get no payment status of jobs", sj.length > 0 && sj.every((k) => !k.includes("invoiceStatus") && !k.includes("crewPaid") && !k.includes("clientPaidAt")), sj[0]);
 });
 
 // ---------- Sign-up, customers and their requests ----------
 await step("sign-up and customers", async () => {
-  const sync403 = (pg) => pg.evaluate(async () => (await fetch("/api/sync", { method: "POST", headers: { "x-tc": "1", "content-type": "application/json" }, body: '{"since":0,"changes":[]}' })).status);
+  const sync403 = (pg) => pg.evaluate(async () => (await fetch("api/sync", { method: "POST", headers: { "x-tc": "1", "content-type": "application/json" }, body: '{"since":0,"changes":[]}' })).status);
   const signup = async (kind, name, user, extra) => {
     const pg = await (await b.newContext(phone)).newPage(); watch(pg, user);
     await pg.goto(TEAM); await pg.waitForSelector("#login-form:not([hidden])");
@@ -296,7 +301,7 @@ await step("sign-up and customers", async () => {
   await again(cp);
   ok("customer sees the people sent", (await main(cp)).includes("Luca Bianchi") && (await main(cp)).includes("Martina Rossi") && (await main(cp)).includes("Tecnico"));
   ok("customer sees it is not paid yet", (await main(cp)).includes("Non ancora fatturato"));
-  ok("customer gets no rates or hours", !(await cp.evaluate(async () => JSON.stringify(await (await fetch("/api/client/overview")).json()))).match(/"rate"|dayRate|"hours"|crewPaid|clientRate/));
+  ok("customer gets no rates or hours", !(await cp.evaluate(async () => JSON.stringify(await (await fetch("api/client/overview")).json()))).match(/"rate"|dayRate|"hours"|crewPaid|clientRate/));
 
   await a.click('#job-seg [data-jv="list"]'); await a.waitForTimeout(300); await a.click('.jcard:has-text("Shooting primavera")'); await a.waitForSelector("#d-job[open]");
   await a.click('.settle [data-act="job-inv"][data-v="paid"]'); await a.waitForTimeout(500); await a.keyboard.press("Escape"); await synced(a);
@@ -317,7 +322,7 @@ await step("sign-up and customers", async () => {
   ok("approving adds them to the team and links the login", (await a.$eval('.acct:has(.nm:has-text("Nadia Colombo")) select[data-link]', (e) => e.selectedOptions[0].textContent)) === "Nadia Colombo");
   await sp.click("#pt-check"); await sp.waitForSelector("#app:not([hidden])"); await sp.waitForTimeout(1500);
   ok("approved staff gets their own page", (await sp.textContent('[data-view="me"]')).includes("NADIA COLOMBO") || (await sp.textContent('[data-view="me"]')).includes("Nadia Colombo"));
-  const sr = await sp.evaluate(async () => (await (await fetch("/api/sync", { method: "POST", headers: { "x-tc": "1", "content-type": "application/json" }, body: '{"since":0,"changes":[]}' })).json()).records.filter((r) => r.c === "requests" && !r.data.deleted).length);
+  const sr = await sp.evaluate(async () => (await (await fetch("api/sync", { method: "POST", headers: { "x-tc": "1", "content-type": "application/json" }, body: '{"since":0,"changes":[]}' })).json()).records.filter((r) => r.c === "requests" && !r.data.deleted).length);
   ok("staff never receive customer requests", sr === 0, sr);
 });
 

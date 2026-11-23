@@ -27,27 +27,43 @@ const ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 // CLIENT_HOSTS (e.g. lumia.rogatski.com) is the public site: staff and customer accounts,
 // and where both sign up (set SIGNUPS=off to close registration).
 // With neither set (running on your own computer) any host serves everyone.
+// ADMIN_PATH (e.g. /admin) instead puts the office site under that path of the public site:
+// lumia.rogatski.com/admin/. ADMIN_HOSTS then only redirect there, so old links keep working.
 const hostList = (v) => String(v || "").split(",").map((h) => h.trim().toLowerCase()).filter(Boolean);
 const ADMIN_HOSTS = hostList(process.env.ADMIN_HOSTS);
 const CLIENT_HOSTS = hostList(process.env.CLIENT_HOSTS);
-const SPLIT_SITES = ADMIN_HOSTS.length > 0 || CLIENT_HOSTS.length > 0;
+const ADMIN_PATH = (() => {
+  const v = String(process.env.ADMIN_PATH || "").trim().replace(/\/+$/, "");
+  if (!v) return "";
+  if (!/^\/[a-z0-9_-]+$/i.test(v)) throw new Error("ADMIN_PATH must look like /admin");
+  return v.toLowerCase();
+})();
+const SPLIT_SITES = ADMIN_HOSTS.length > 0 || CLIENT_HOSTS.length > 0 || !!ADMIN_PATH;
 // First-run setup can require a one-time code, so nobody who finds the site first can claim it.
 const SETUP_CODE = String(process.env.SETUP_CODE || "");
 const SIGNUPS = String(process.env.SIGNUPS || "on").toLowerCase() !== "off";
+const hostOf = (req) => String(req.headers.host || "").toLowerCase().replace(/:\d+$/, "");
+const pathOf = (req) => String(req.url || "/").split("?")[0];
+const underAdminPath = (req) => !!ADMIN_PATH && (pathOf(req) === ADMIN_PATH || pathOf(req).startsWith(ADMIN_PATH + "/"));
 function siteOf(req) {
   if (!SPLIT_SITES) return "any";
-  const host = String(req.headers.host || "").toLowerCase().replace(/:\d+$/, "");
+  const host = hostOf(req);
   if (ADMIN_HOSTS.includes(host)) return "admin";
-  if (CLIENT_HOSTS.includes(host)) return "client";
+  // With ADMIN_PATH and no CLIENT_HOSTS, any other address is the public site.
+  if (CLIENT_HOSTS.includes(host) || (ADMIN_PATH && !CLIENT_HOSTS.length)) return underAdminPath(req) ? "admin" : "client";
   return "unknown";
 }
 const roleAllowed = (site, role) => site === "any" || (site === "admin" && role === "admin") || (site === "client" && role !== "admin");
-const siteUrl = (hosts) => (hosts[0] ? `https://${hosts[0]}` : null);
+const ADMIN_URL = ADMIN_PATH ? (CLIENT_HOSTS[0] ? `https://${CLIENT_HOSTS[0]}` : "") + ADMIN_PATH + "/" : ADMIN_HOSTS[0] ? `https://${ADMIN_HOSTS[0]}` : null;
+const CLIENT_URL = CLIENT_HOSTS[0] ? `https://${CLIENT_HOSTS[0]}` : ADMIN_PATH ? "/" : null;
+const shortUrl = (u) => String(u || "").replace(/^https:\/\//, "").replace(/\/$/, "");
 function wrongSiteMessage(site) {
   return site === "admin"
-    ? `Questo è il sito dell'ufficio, per gli amministratori. La squadra accede da ${CLIENT_HOSTS[0] || "il sito della squadra"}.`
-    : `Gli amministratori accedono dal sito dell'ufficio: ${ADMIN_HOSTS[0] || "il sito dell'ufficio"}.`;
+    ? `Questo è il sito dell'ufficio, per gli amministratori. La squadra accede da ${shortUrl(CLIENT_URL) || "il sito della squadra"}.`
+    : `Gli amministratori accedono dal sito dell'ufficio: ${shortUrl(ADMIN_URL) || "il sito dell'ufficio"}.`;
 }
+// The office site under a path keeps its own sign-in, so one browser can be in both sites.
+const cookieFor = (req) => (ADMIN_PATH && underAdminPath(req) ? { name: "tc_admin", path: ADMIN_PATH } : { name: "tc_session", path: "/" });
 
 fs.mkdirSync(PHOTO_DIR, { recursive: true });
 
@@ -194,10 +210,11 @@ function isSecure(req) {
   return process.env.COOKIE_SECURE === "1" || req.headers["x-forwarded-proto"] === "https";
 }
 function sessionCookie(req, token, maxAge) {
-  return `tc_session=${token}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${maxAge}${isSecure(req) ? "; Secure" : ""}`;
+  const c = cookieFor(req);
+  return `${c.name}=${token}; HttpOnly; Path=${c.path}; SameSite=Lax; Max-Age=${maxAge}${isSecure(req) ? "; Secure" : ""}`;
 }
 function currentUser(req) {
-  const token = parseCookies(req).tc_session;
+  const token = parseCookies(req)[cookieFor(req).name];
   if (!token) return null;
   const u = q.session.get(sha256(token), Date.now()) || null;
   // A session only works on the site that matches the account's role (re-checked on every
@@ -653,12 +670,22 @@ const SECURITY_HEADERS = {
 async function route(req, res) {
   for (const [k, v] of Object.entries(SECURITY_HEADERS)) res.setHeader(k, v);
   const url = new URL(req.url, "http://x");
-  const p = url.pathname;
+  let p = url.pathname;
   const ip = req.headers["cf-connecting-ip"] || req.headers["x-forwarded-for"]?.split(",")[0].trim() || req.socket.remoteAddress;
   const site = siteOf(req);
 
   if (p === "/api/health") return send(res, 200, { ok: true });
   if (site === "unknown") return fail(res, 404, "Sito sconosciuto.");
+  // The office moved under ADMIN_PATH: send the old office address there.
+  if (ADMIN_PATH && ADMIN_HOSTS.includes(hostOf(req)) && CLIENT_HOSTS[0]) {
+    const rest = p.startsWith(ADMIN_PATH + "/") ? p.slice(ADMIN_PATH.length) : p;
+    res.writeHead(301, { Location: `https://${CLIENT_HOSTS[0]}${ADMIN_PATH}${rest}${url.search}`, "Cache-Control": "no-store" });
+    return res.end();
+  }
+  if (underAdminPath(req)) {
+    if (p === ADMIN_PATH) { res.writeHead(301, { Location: `${ADMIN_PATH}/${url.search}`, "Cache-Control": "no-store" }); return res.end(); }
+    p = p.slice(ADMIN_PATH.length); // the office site sees the same paths as the public one
+  }
   // Behind Cloudflare: send plain-http visitors to https, and tell browsers to stay on https.
   if (SPLIT_SITES) {
     const proto = String(req.headers["x-forwarded-proto"] || "").toLowerCase();
@@ -690,7 +717,7 @@ async function route(req, res) {
   }
 
   if (p === "/api/site" && req.method === "GET") {
-    return send(res, 200, { site, adminUrl: siteUrl(ADMIN_HOSTS), clientUrl: siteUrl(CLIENT_HOSTS), setupCode: !!SETUP_CODE, signups: SIGNUPS && site !== "admin" });
+    return send(res, 200, { site, adminUrl: ADMIN_URL, clientUrl: CLIENT_URL, setupCode: !!SETUP_CODE, signups: SIGNUPS && site !== "admin" });
   }
 
   if (p === "/api/me" && req.method === "GET") {

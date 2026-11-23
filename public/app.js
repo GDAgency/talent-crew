@@ -5,6 +5,11 @@
 (() => {
   "use strict";
 
+  // Where this copy of the app is served: "/" for the public site, "/admin/" for the office.
+  // Every server address below is relative to it.
+  const ROOT = new URL(".", document.currentScript.src).pathname;
+  const at = (p) => ROOT + String(p).replace(/^\//, "");
+
   // ---------- Small helpers ----------
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -32,7 +37,7 @@
   const idb = (() => {
     let opening;
     const open = () => opening ||= new Promise((res, rej) => {
-      const r = indexedDB.open("talent-crew", 1);
+      const r = indexedDB.open(ROOT === "/" ? "talent-crew" : "talent-crew" + ROOT.replace(/\/$/, ""), 1);
       r.onupgradeneeded = () => {
         const d = r.result;
         d.createObjectStore("records", { keyPath: "key" });
@@ -170,7 +175,7 @@
     const headers = { "x-tc": "1" };
     if (blob) headers["content-type"] = blob.type;
     else if (body !== undefined) headers["content-type"] = "application/json";
-    const r = await fetch(path, { method, headers, credentials: "same-origin", body: blob || (body !== undefined ? JSON.stringify(body) : undefined) });
+    const r = await fetch(at(path), { method, headers, credentials: "same-origin", body: blob || (body !== undefined ? JSON.stringify(body) : undefined) });
     let j = null;
     try { j = await r.json(); } catch { /* empty */ }
     if (!r.ok) throw Object.assign(new Error(j?.error || "Richiesta non riuscita"), { status: r.status, msg: j?.error });
@@ -527,7 +532,7 @@
   function photoSrc(r) {
     const local = localPhotos.get(r.id);
     if (local) return local.url;
-    if (r.photoUploaded) return "/api/photos/" + encodeURIComponent(r.id);
+    if (r.photoUploaded) return at("/api/photos/" + encodeURIComponent(r.id));
     return null;
   }
   function shot(r) {
@@ -2783,10 +2788,10 @@ ${docCss()}
   let siteInfo = null;
   async function loadSite() {
     let site = await meta.get("site").catch(() => null);
-    try { const r = await fetch("/api/site", { credentials: "same-origin" }); if (r.ok) { site = await r.json(); await meta.set("site", site); } } catch { /* offline: use the saved copy */ }
+    try { const r = await fetch(at("/api/site"), { credentials: "same-origin" }); if (r.ok) { site = await r.json(); await meta.set("site", site); } } catch { /* offline: use the saved copy */ }
     if (!site) return;
     siteInfo = site;
-    const host = (u) => (u ? u.replace(/^https?:\/\//, "") : "");
+    const host = (u) => (u ? new URL(u, location.href).href.replace(/^https?:\/\//, "").replace(/\/$/, "") : "");
     const other = $("#li-other");
     if (site.site === "admin") {
       $("#auth-site").textContent = "Ufficio";
@@ -2803,13 +2808,13 @@ ${docCss()}
   }
 
   async function boot() {
-    if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
+    if ("serviceWorker" in navigator) navigator.serviceWorker.register(at("/sw.js"), { scope: ROOT }).catch(() => {});
     await loadSite();
     await loadState();
     sync.last = (await meta.get("lastSync")) || 0;
     const cached = await meta.get("me");
     try {
-      const r = await fetch("/api/me", { credentials: "same-origin" });
+      const r = await fetch(at("/api/me"), { credentials: "same-origin" });
       if (r.ok) {
         const j = await r.json();
         if (j.needsSetup) return showAuth("setup");

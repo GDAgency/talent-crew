@@ -1,4 +1,5 @@
-# Lumia: the Talent & Crew app on lumia.rogatski.com (team) and adminlumia.rogatski.com (office),
+# Lumia: the Talent & Crew app on lumia.rogatski.com (team and customers) and lumia.rogatski.com/admin/
+# (office; the old adminlumia.rogatski.com redirects there),
 # published through its own Cloudflare Tunnel (no open ports on this machine).
 #
 #   Start / update:  docker compose -f deploy/docker-compose.yml up -d --build
@@ -21,6 +22,7 @@ services:
       DATA_DIR: /data
       ADMIN_HOSTS: adminlumia.rogatski.com
       CLIENT_HOSTS: lumia.rogatski.com
+      ADMIN_PATH: /admin
       COOKIE_SECURE: "1"
     volumes:
       - ${LUMIA_HOME:-/data/lumia}/data:/data

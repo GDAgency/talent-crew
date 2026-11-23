@@ -11,12 +11,12 @@ It's one web address that works two ways:
 
 ```
 git clone https://github.com/GDAgency/talent-crew.git lumia && cd lumia
-cp .env.example .env        # set ADMIN_HOSTS, CLIENT_HOSTS and SETUP_CODE
+cp .env.example .env        # set CLIENT_HOSTS, ADMIN_PATH (or ADMIN_HOSTS) and SETUP_CODE
 docker compose up -d --build
 ```
 
-- The app listens on port 3000. Put it behind an HTTPS reverse proxy or tunnel and point both addresses at it. The container needs to own `./data` (`sudo chown -R 1000:1000 data` if it can't write).
-- Open the office address (`ADMIN_HOSTS`) and create the first administrator with the setup code.
+- The app listens on port 3000. Put it behind an HTTPS reverse proxy or tunnel and point the address(es) at it. A one-off `data-owner` step hands `./data` to the app's user before it starts.
+- Open the office (`https://<your address>/admin/`, or the `ADMIN_HOSTS` address) and create the first administrator with the setup code.
 - There is no separate database to install: everything is in `./data` (`ledger.db`, receipt photos, daily backups). To move an existing installation, stop the app and copy its `data` folder.
 - Update: `git pull && docker compose up -d --build`. Older databases are upgraded on start.
 - No Docker: `DATA_DIR=./data ADMIN_HOSTS=… CLIENT_HOSTS=… node server/server.js` with Node 22.5 or newer; there are no dependencies to install.
@@ -84,22 +84,23 @@ Settings (all optional):
 | `PORT` | `3000` | Port to listen on |
 | `DATA_DIR` | `./data` | Where the database and photos are kept |
 | `COOKIE_SECURE` | off | Set to `1` to force secure cookies (normally detected automatically behind HTTPS) |
+| `ADMIN_PATH` | – | Put the office under this path of the public site, e.g. `/admin` → `https://lumia.rogatski.com/admin/`. It has its own sign-in, so the same browser can be in both. `ADMIN_HOSTS`, if also set, then just redirect there. |
 | `ADMIN_HOSTS` | – | Office site host name(s), comma-separated. Only admin accounts can sign in there. |
 | `CLIENT_HOSTS` | – | Team site host name(s). Only staff accounts can sign in there. With neither set, any address serves everyone. |
 | `SETUP_CODE` | – | One-time code required to create the first admin account. |
 
 The server also writes a copy of the database to `data/backups/` once a day and keeps the last 14.
 
-## Live: lumia.rogatski.com and adminlumia.rogatski.com
+## Live: lumia.rogatski.com
 
 | Site | Address | Who signs in |
 |---|---|---|
 | Team | https://lumia.rogatski.com | Models and technicians (staff accounts) |
-| Office | https://adminlumia.rogatski.com | Agency admins |
+| Office | https://lumia.rogatski.com/admin/ | Agency admins |
 
-Both sites are the same server. Each one turns away the other kind of account and points to the right address. They install on phones as separate apps ("Talent & Crew" and "Talent & Crew · Office").
+Both sites are the same server. Each one turns away the other kind of account and points to the right address. They install on phones as separate apps ("Lumia" and "Lumia Ufficio"). The old office address, adminlumia.rogatski.com, redirects to `/admin/`.
 
-It runs on this machine with Docker and its own Cloudflare Tunnel named `lumia`, so no ports are open on the router. Plain `http://` visits are redirected to `https://`.
+It runs on the agency's server (the `pc-lumia` machine) with Docker and its own Cloudflare Tunnel named `lumia`, so no ports are open on the router. Plain `http://` visits are redirected to `https://`.
 
 ```bash
 docker compose -f deploy/docker-compose.yml up -d --build   # start, or deploy an update
@@ -107,7 +108,7 @@ docker compose -f deploy/docker-compose.yml logs -f         # watch logs
 docker compose -f deploy/docker-compose.yml down            # stop
 ```
 
-Both containers restart by themselves after a reboot. The files that aren't in this repo live in `/data/lumia`:
+Both containers restart by themselves after a reboot. The files that aren't in this repo live in `LUMIA_HOME` (on the server `/home/pc-lumia/lumia-home`, set in `deploy/.env`):
 - `data/`: the database, receipt photos and daily backups. **Copy this folder off the machine regularly.**
 - `lumia.env`: `SETUP_CODE`, needed once to create the first admin on the office site.
 - `tunnel/`: the tunnel's settings and secret credentials.

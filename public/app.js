@@ -570,12 +570,39 @@
       </article>`).join("")}</div>`;
   }
 
+  // Who still has to be paid, job by job: ready (the customer paid us and their fattura is in),
+  // waiting for their fattura, or waiting for the customer.
+  function toPayHtml() {
+    if (!isAdmin()) return "";
+    const all = [];
+    for (const j of state.jobs) {
+      if (j.archived) continue;
+      const st = settle(j);
+      for (const c of st.crew) if (!c.done && !c.idle && (!ui.pPerson || c.pid === ui.pPerson)) all.push({ j, c, clientPaid: st.clientPaid });
+    }
+    if (!all.length) return "";
+    all.sort((a, b) => byStart(a.j, b.j) || personName(a.c.pid).localeCompare(personName(b.c.pid)));
+    const sum = (xs) => money(round2(xs.reduce((t, x) => t + x.c.due, 0)));
+    const row = (x) => `<li><span class="sp-who"><b>${esc(personName(x.c.pid))}</b><span>${fmtShort(x.j.date)} · ${esc(jobLabel(x.j))}</span></span>${fatBtn(x.j, x.c)}
+      <span class="sp-state"><span class="pill ${x.clientPaid && x.c.fattura ? "owed" : "wait"}">${money(x.c.due)}</span></span>
+      <span class="sp-acts"><button class="btn sm ${x.clientPaid && x.c.fattura ? "primary" : ""}" type="button" data-act="job-pay" data-id="${x.j.id}" data-person="${x.c.pid}">${ICON.card}Paga</button></span></li>`;
+    const group = (xs, title, sub, open = true) => !xs.length ? "" : `<details class="topay-g" ${open ? "open" : ""}><summary><b>${title}</b><span>${xs.length} · ${sum(xs)}</span><em>${sub}</em></summary><ul class="settle-people">${xs.map(row).join("")}</ul></details>`;
+    const ready = all.filter((x) => x.clientPaid && x.c.fattura), noFat = all.filter((x) => x.clientPaid && !x.c.fattura), waiting = all.filter((x) => !x.clientPaid);
+    return `<section class="topay">
+      <div class="topay-h"><h2>Da pagare</h2><p>Chi va pagato per ogni lavoro non ancora archiviato.</p></div>
+      ${group(ready, "Pronti da pagare", "Il cliente ci ha pagato e la fattura è arrivata.")}
+      ${group(noFat, "Manca la fattura", "Il cliente ci ha pagato: aspettiamo la loro fattura.")}
+      ${group(waiting, "In attesa del cliente", "Il cliente non ci ha ancora pagato.", !ready.length && !noFat.length)}
+    </section>`;
+  }
+
   function renderPayments() {
     const el = $("#payments");
     const rows = state.payments.filter((p) => !ui.pPerson || p.personId === ui.pPerson)
       .sort((a, b) => (b.date || "").localeCompare(a.date || "") || (b.createdAt || 0) - (a.createdAt || 0));
+    const toPay = toPayHtml();
     if (!rows.length) {
-      el.innerHTML = empty("Nessun pagamento registrato", "Registra ogni pagamento quando parte, così in Persone si vede chi è stato pagato e cosa resta da pagare.", isAdmin() && state.people.length ? "add-payment" : null, "Registra un pagamento");
+      el.innerHTML = toPay + empty("Nessun pagamento registrato", "Registra ogni pagamento quando parte, così in Persone si vede chi è stato pagato e cosa resta da pagare.", isAdmin() && state.people.length ? "add-payment" : null, "Registra un pagamento");
       return;
     }
     let total = 0;
@@ -589,7 +616,7 @@
         <span class="d">${isAdmin() ? `<button class="btn quiet sm danger" type="button" data-act="del-payment" data-id="${p.id}">Elimina</button>` : ""}</span>
       </div>`;
     }).join("");
-    el.innerHTML = `<div class="list">${cards}<div class="list-total"><span>${rows.length} ${rows.length === 1 ? "pagamento" : "pagamenti"}</span><b>${money(rows.reduce((a, p) => a + (Number(p.amount) || 0) + (Number(p.receiptsAmount) || 0), 0))}</b></div></div><div class="tablebox hours-table"><table>
+    el.innerHTML = `${toPay}${toPay ? `<h2 class="paid-h">Pagamenti fatti</h2>` : ""}<div class="list">${cards}<div class="list-total"><span>${rows.length} ${rows.length === 1 ? "pagamento" : "pagamenti"}</span><b>${money(rows.reduce((a, p) => a + (Number(p.amount) || 0) + (Number(p.receiptsAmount) || 0), 0))}</b></div></div><div class="tablebox hours-table"><table>
       <thead><tr><th>Data</th><th>Pagato a</th><th>Metodo · nota</th><th class="n">Compensi</th><th class="n">Ricevute</th><th class="n">Totale</th><th></th></tr></thead>
       <tbody>${rows.map((p) => {
         const rec = Number(p.receiptsAmount) || 0, t = (Number(p.amount) || 0) + rec; total += t;
@@ -1740,6 +1767,7 @@ ${docCss()}
       "settings.edit": `ha impostato la valuta su ${esc(i.currency || "")}`,
       "job.clientpaid": `ha segnato che il cliente ha pagato ${esc(i.title || "un lavoro")}`,
       "job.crewpaid": `ha segnato ${P} come pagato/a per ${esc(i.title || "un lavoro")}`,
+      "job.fattura": `ha ricevuto la fattura di ${P} per ${esc(i.title || "un lavoro")}`,
       "job.archive": `ha archiviato ${esc(i.title || "un lavoro")}: cliente e squadra pagati`,
       "job.unarchive": `ha ripristinato ${esc(i.title || "un lavoro")} dall'archivio`,
       "place.add": `ha salvato il luogo ${esc(i.name || "")}`,
@@ -1876,13 +1904,15 @@ ${docCss()}
       const manual = j.crewPaid?.[pid] || "";
       const done = !!manual || (earned > 0.004 && paid >= earned - 0.004);
       const at = manual || pays.map((x) => x.date || "").sort().pop() || "";
-      return { pid, earned, paid, manual, done, at, due: done ? 0 : round2(Math.max(0, earned - paid)), idle: !done && earned < 0.005 };
+      // The person's fattura to the agency for this job (date it arrived), ticked by the office.
+      const fattura = j.crewInvoice?.[pid] || "";
+      return { pid, earned, paid, manual, done, at, fattura, due: done ? 0 : round2(Math.max(0, earned - paid)), idle: !done && earned < 0.005 };
     });
   }
   function settle(j) {
     const crew = crewPay(j), owed = crew.filter((c) => !c.idle);
     const clientPaid = invOf(j) === "paid", crewDone = owed.every((c) => c.done);
-    return { crew, clientPaid, crewDone, nPaid: owed.filter((c) => c.done).length, nOwed: owed.length, done: clientPaid && crewDone };
+    return { crew, clientPaid, crewDone, nPaid: owed.filter((c) => c.done).length, nOwed: owed.length, nFat: owed.filter((c) => c.fattura).length, done: clientPaid && crewDone };
   }
   function crewPill(j, st = settle(j)) {
     if (!st.nOwed) return "";
@@ -2061,13 +2091,17 @@ ${docCss()}
   }
 
   // Has the client paid us, have we paid the people: the two sides of a job, and its archive.
+  // Has this person sent us their fattura for the job? A toggle for the office.
+  const fatBtn = (j, c) => `<button class="fat" type="button" data-act="job-fattura" data-id="${j.id}" data-person="${c.pid}" aria-pressed="${!!c.fattura}" ${j.archived || !isAdmin() ? "disabled" : ""}
+    title="${c.fattura ? "Tocca per togliere il segno" : "Segna che la fattura è arrivata"}"><svg viewBox="0 0 24 24">${c.fattura ? '<path d="M5 12.5l4.5 4.5L19 7.5"/>' : '<rect x="5" y="5" width="14" height="14" rx="3"/>'}</svg>${c.fattura ? `Fattura ricevuta · ${fmtShort(c.fattura)}` : "Fattura non ricevuta"}</button>`;
   function settleBox(j) {
     const st = settle(j), inv = invOf(j);
     const rows = st.crew.map((c) => {
-      const state_ = c.done ? `<span class="pill paid">Pagato${c.at ? ` · ${fmtShort(c.at)}` : ""}</span>` : c.idle ? `<span class="pill wait">Nessuna ora approvata</span>` : `<span class="pill owed">Da pagare ${money(c.due)}</span>`;
+      const state_ = c.done ? `<span class="pill paid">Pagato${c.at ? ` · ${fmtShort(c.at)}` : ""}</span>` : c.idle ? `<span class="pill wait">Nessuna ora approvata</span>`
+        : `<span class="pill owed">Da pagare ${money(c.due)}</span>${!st.clientPaid ? `<span class="sp-note">il cliente non ha ancora pagato</span>` : !c.fattura ? `<span class="sp-note">manca la fattura</span>` : `<span class="sp-note ok">pronto da pagare</span>`}`;
       const acts = j.archived ? "" : c.manual ? `<button class="btn quiet sm" type="button" data-act="job-unmark" data-id="${j.id}" data-person="${c.pid}">Annulla</button>`
         : c.done || c.idle ? "" : `<button class="btn sm primary" type="button" data-act="job-pay" data-id="${j.id}" data-person="${c.pid}">${ICON.card}Paga</button><button class="btn quiet sm" type="button" data-act="job-mark" data-id="${j.id}" data-person="${c.pid}" title="Già pagato in altro modo">Già pagato</button>`;
-      return `<li><span class="sp-who"><b>${esc(personName(c.pid))}</b><span class="mono">${money(c.earned)}${c.paid && !c.done ? ` · pagati ${money(c.paid)}` : ""}</span></span>${state_}<span class="sp-acts">${acts}</span></li>`;
+      return `<li><span class="sp-who"><b>${esc(personName(c.pid))}</b><span class="mono">${money(c.earned)}${c.paid && !c.done ? ` · pagati ${money(c.paid)}` : ""}</span></span>${c.idle && !c.fattura ? "" : fatBtn(j, c)}<span class="sp-state">${state_}</span><span class="sp-acts">${acts}</span></li>`;
     }).join("");
     const foot = j.archived
       ? `<div class="settle-foot done"><span><b>Archiviato${j.archivedAt ? ` il ${fmtDate(j.archivedAt)}` : ""}.</b> Cliente e squadra pagati.</span><button class="btn sm" type="button" data-act="job-unarchive" data-id="${j.id}">Ripristina</button></div>`
@@ -2079,7 +2113,7 @@ ${docCss()}
         <div class="seg" role="group" aria-label="Pagamento del cliente">${Object.entries(INV).map(([v, l]) => `<button type="button" data-act="job-inv" data-id="${j.id}" data-v="${v}" aria-pressed="${inv === v}" ${j.archived ? "disabled" : ""}>${v === "paid" ? "Ha pagato" : l}</button>`).join("")}</div>
       </div>
       <div class="settle-side">
-        <div class="settle-h"><span class="step ${st.crewDone && st.nOwed ? "ok" : ""}">2</span><div><h4>Abbiamo pagato la squadra?</h4><p>${!st.nOwed ? "Ancora nessuna ora approvata su questo lavoro." : st.crewDone ? "Sì, tutti pagati per questo lavoro." : `${st.nPaid} su ${st.nOwed} pagati per questo lavoro.`}</p></div></div>
+        <div class="settle-h"><span class="step ${st.crewDone && st.nOwed ? "ok" : ""}">2</span><div><h4>Fatture e pagamenti della squadra</h4><p>${!st.nOwed ? "Ancora nessuna ora approvata su questo lavoro." : `${st.crewDone ? "Tutti pagati" : `${st.nPaid} su ${st.nOwed} pagati`} · ${st.nFat === st.nOwed ? "tutte le fatture ricevute" : `${st.nFat} su ${st.nOwed} fatture ricevute`}.`}</p></div></div>
         ${rows ? `<ul class="settle-people">${rows}</ul>` : ""}
       </div>
       ${foot}
@@ -2257,6 +2291,13 @@ ${docCss()}
         const crewPaid = { ...(j.crewPaid || {}) };
         if (t.dataset.act === "job-mark") crewPaid[pid] = isoDay(); else delete crewPaid[pid];
         return save("jobs", { ...j, crewPaid }).then(() => toast(t.dataset.act === "job-mark" ? `${personName(pid)}: segnato come pagato per questo lavoro` : "Segno rimosso"));
+      }
+      case "job-fattura": {
+        const j = state.jobs.find((x) => x.id === id), pid = t.dataset.person;
+        if (!j || !isAdmin() || j.archived) return;
+        const crewInvoice = { ...(j.crewInvoice || {}) }, had = !!crewInvoice[pid];
+        if (had) delete crewInvoice[pid]; else crewInvoice[pid] = isoDay();
+        return save("jobs", { ...j, crewInvoice }).then(() => toast(had ? "Segno della fattura tolto" : `Fattura di ${personName(pid)} ricevuta`));
       }
       case "job-archive": {
         const j = state.jobs.find((x) => x.id === id);
@@ -2753,21 +2794,15 @@ ${docCss()}
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && me?.role === "client" && !$("#portal").hidden && !$$("dialog[open]").length) loadPortal(); });
 
   // ---------- Sign up ----------
-  let sgKind = "staff";
-  function paintSignup() {
-    $$("#sg-kind button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.kind === sgKind)));
-    $("#sg-company-wrap").hidden = sgKind !== "client"; $("#sg-wants-wrap").hidden = sgKind !== "staff";
-    $("#sg-sub").textContent = sgKind === "client" ? "Per le aziende: richiedi modelli/e e tecnici e vedi chi ti viene inviato." : "Per modelli/e e tecnici. L'ufficio approva l'iscrizione prima che tu possa entrare.";
-  }
-  $("#sg-kind").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) { sgKind = b.dataset.kind; paintSignup(); } });
-  $("#go-signup").addEventListener("click", (e) => { e.preventDefault(); paintSignup(); showErr($("#sg-err"), ""); showAuth("signup"); });
+  // Only the team signs up; customer accounts are made by the office.
+  $("#go-signup").addEventListener("click", (e) => { e.preventDefault(); showErr($("#sg-err"), ""); showAuth("signup"); });
   $("#go-login").addEventListener("click", (e) => { e.preventDefault(); showAuth("login"); });
   $("#signup-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     const err = $("#sg-err"), btn = $("#sg-btn");
     showErr(err, ""); btn.disabled = true;
     try {
-      const r = await api("/api/signup", { body: { kind: sgKind, name: $("#sg-name").value.trim(), company: $("#sg-company").value.trim(), wants: $("#sg-wants").value, phone: $("#sg-phone").value.trim(), username: $("#sg-user").value.trim(), password: $("#sg-pass").value } });
+      const r = await api("/api/signup", { body: { kind: "staff", name: $("#sg-name").value.trim(), wants: $("#sg-wants").value, phone: $("#sg-phone").value.trim(), username: $("#sg-user").value.trim(), password: $("#sg-pass").value } });
       $("#sg-pass").value = "";
       await enter(r.user);
     } catch (x) { showErr(err, x.status ? x.msg : "Nessuna connessione. Devi essere online per registrarti."); }
@@ -2800,7 +2835,7 @@ ${docCss()}
       if (site.clientUrl) { other.hidden = false; other.innerHTML = `Modello/a o tecnico? Accedi su <a href="${esc(site.clientUrl)}">${esc(host(site.clientUrl))}</a>`; }
     } else if (site.site === "client") {
       $("#auth-site").textContent = "Squadra e clienti";
-      $("#li-sub").textContent = "Per chi lavora con l'agenzia e per i clienti.";
+      $("#li-sub").textContent = "Per modelli/e e tecnici che lavorano con l'agenzia.";
       if (site.adminUrl) { other.hidden = false; other.innerHTML = `Amministratore dell'agenzia? Usa <a href="${esc(site.adminUrl)}">${esc(host(site.adminUrl))}</a>`; }
     }
     $("#su-code-wrap").hidden = !site.setupCode;

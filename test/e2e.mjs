@@ -247,6 +247,15 @@ await step("settling", async () => {
   await a.click('#d-shift [type="submit"]'); await a.waitForSelector("#d-shift", hidden); await a.waitForTimeout(600);
   const row = '.settle-people li:has-text("Luca")';
   ok("Luca is owed 3 h × €38 for this job", (await a.textContent(row)).includes("Da pagare") && (await a.textContent(row)).includes("114,00"), await a.textContent(row));
+  ok("…waiting for the customer, no fattura yet", (await a.textContent(row)).includes("il cliente non ha ancora pagato") && (await a.textContent(row)).includes("Fattura non ricevuta"), await a.textContent(row));
+  await a.click(`${row} [data-act="job-fattura"]`); await a.waitForTimeout(500);
+  ok("office ticks Luca's fattura as received", (await a.textContent(row)).includes("Fattura ricevuta") && (await a.textContent(".settle-h:has-text('Fatture')")).includes("tutte le fatture ricevute"), await a.textContent(row));
+  { // Pagamenti in a second tab of the same browser (same device data), so this job stays open here.
+    await synced(a); const pp = await a.context().newPage(); await pp.setViewportSize({ width: 1280, height: 900 });
+    await pp.goto(ADMIN + "/#payments"); await pp.waitForSelector('[data-view="payments"]:not([hidden])'); await pp.waitForTimeout(800);
+    ok("Pagamenti lists Luca as waiting for the customer", (await pp.textContent('.topay-g:has-text("In attesa del cliente")')).includes("Luca Bianchi"), await pp.textContent(".topay").catch(() => "no Da pagare section"));
+    await pp.screenshot({ path: OUT + "/13b-da-pagare.png", fullPage: true }); await pp.close();
+  }
   await a.click(`${row} [data-act="job-pay"]`); await a.waitForSelector("#d-pay[open]");
   ok("payment form is for this job and this amount", (await a.$eval("#yf-job", (e) => e.selectedOptions[0].textContent)).includes("Campagna inverno") && (await a.inputValue("#yf-amount")) === "114.00", await a.inputValue("#yf-amount"));
   await a.click('#d-pay [type="submit"]'); await a.waitForSelector("#d-pay", hidden); await a.waitForTimeout(800);
@@ -267,7 +276,7 @@ await step("settling", async () => {
   ok("restoring brings it back", (await a.locator(card).count()) === 1);
   await synced(a); await s.waitForTimeout(500);
   const sj = await s.evaluate(async () => (await (await fetch("api/sync", { method: "POST", headers: { "x-tc": "1", "content-type": "application/json" }, body: '{"since":0,"changes":[]}' })).json()).records.filter((r) => r.c === "jobs").map((r) => Object.keys(r.data)));
-  ok("staff get no payment status of jobs", sj.length > 0 && sj.every((k) => !k.includes("invoiceStatus") && !k.includes("crewPaid") && !k.includes("clientPaidAt")), sj[0]);
+  ok("staff get no payment status of jobs", sj.length > 0 && sj.every((k) => !k.includes("invoiceStatus") && !k.includes("crewPaid") && !k.includes("crewInvoice") && !k.includes("clientPaidAt")), sj[0]);
 });
 
 // ---------- Sign-up, customers and their requests ----------
@@ -276,7 +285,7 @@ await step("sign-up and customers", async () => {
   const signup = async (kind, name, user, extra) => {
     const pg = await (await b.newContext(phone)).newPage(); watch(pg, user);
     await pg.goto(TEAM); await pg.waitForSelector("#login-form:not([hidden])");
-    await pg.click("#go-signup"); await pg.click(`#sg-kind [data-kind="${kind}"]`);
+    await pg.click("#go-signup");
     await pg.fill("#sg-name", name); await pg.fill("#sg-user", user); await pg.fill("#sg-pass", "password-123"); await pg.fill("#sg-phone", "+39 333 000 1111");
     await extra(pg); await pg.click("#sg-btn"); await pg.waitForSelector("#portal:not([hidden])"); await pg.waitForTimeout(800);
     return pg;
@@ -284,9 +293,21 @@ await step("sign-up and customers", async () => {
   const main = (pg) => pg.textContent("#pt-main");
   const again = async (pg) => { await pg.reload(); await pg.waitForSelector("#portal:not([hidden])"); await pg.waitForTimeout(1200); };
 
-  const cp = await signup("client", "Carla Verdi", "carla@maisonverdi.it", (pg) => pg.fill("#sg-company", "Maison Verdi"));
-  ok("customer signs up and lands in their own area", (await main(cp)).includes("Richiedi persone"));
-  ok("unconfirmed customer sees no existing jobs of that company", !(await main(cp)).includes("Campagna inverno"));
+  // Customers don't sign up: the form is for the team only and the server refuses it.
+  const probe = await (await b.newContext()).newPage(); await probe.goto(TEAM); await probe.waitForSelector("#login-form:not([hidden])"); await probe.click("#go-signup");
+  ok("sign-up has no customer option", (await probe.locator('[data-kind="client"], #sg-company').count()) === 0 && (await probe.textContent("#signup-form")).includes("modelli/e e tecnici"));
+  const refused = await probe.evaluate(async () => (await fetch("api/signup", { method: "POST", headers: { "x-tc": "1", "content-type": "application/json" }, body: JSON.stringify({ kind: "client", name: "Carla Verdi", company: "Maison Verdi", username: "carla.probe", password: "password-123" }) })).status);
+  ok("server refuses a customer sign-up", refused === 403, refused);
+  await probe.context().close();
+  // The office makes the customer's login instead.
+  await a.goto(ADMIN + "/#settings"); await a.waitForSelector('[data-view="settings"]:not([hidden])');
+  const made = await a.evaluate(async () => (await fetch("api/users", { method: "POST", headers: { "x-tc": "1", "content-type": "application/json" }, body: JSON.stringify({ name: "Carla Verdi", username: "carla@maisonverdi.it", password: "password-123", role: "client", company: "Maison Verdi" }) })).status);
+  ok("office creates the customer's account", made === 200, made);
+  const cp = await (await b.newContext(phone)).newPage(); watch(cp, "carla");
+  await cp.goto(TEAM); await cp.waitForSelector("#login-form:not([hidden])");
+  await cp.fill("#li-user", "carla@maisonverdi.it"); await cp.fill("#li-pass", "password-123"); await cp.click("#li-btn"); await cp.waitForSelector("#portal:not([hidden])"); await cp.waitForTimeout(800);
+  ok("customer signs in to their own area", (await main(cp)).includes("Richiedi persone"));
+  ok("customer made by the office sees the company's jobs", (await main(cp)).includes("Campagna inverno"));
   ok("customer has no access to the ledger", (await sync403(cp)) === 403);
   await cp.click("#pt-new"); await cp.waitForSelector("#d-request[open]");
   await cp.fill("#rq-title", "Shooting primavera"); await cp.fill("#rq-loc", "Via Tortona 27, Milano"); await cp.fill("#rq-call", "09:00"); await cp.fill("#rq-techs", "1");
@@ -314,11 +335,7 @@ await step("sign-up and customers", async () => {
   await again(cp);
   ok("office marks the customer's payment: customer sees paid", (await main(cp)).includes("Pagato"));
 
-  await a.goto(ADMIN + "/#settings"); await a.reload(); await a.waitForSelector('[data-act="confirm-client"]');
-  ok("office sees the sign-up to confirm", (await a.textContent("#acct-list")).includes("Cliente da confermare"));
-  await a.click('[data-act="confirm-client"]'); await a.waitForTimeout(1200);
-  await again(cp);
-  ok("confirmed customer also sees the company's other jobs", (await main(cp)).includes("Campagna inverno"));
+  await a.goto(ADMIN + "/#settings"); await a.reload(); await a.waitForSelector('[data-view="settings"]:not([hidden])'); await a.waitForTimeout(800);
   await cp.screenshot({ path: OUT + "/18-customer-jobs.png", fullPage: true });
 
   const sp = await signup("staff", "Nadia Colombo", "nadia.colombo", (pg) => pg.selectOption("#sg-wants", "technician"));

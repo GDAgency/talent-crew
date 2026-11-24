@@ -112,6 +112,9 @@ for (const j of jobs) {
   const age = -j.to;
   j.inv = age > 21 ? "paid" : age > 7 ? pick(["paid", "invoiced", "invoiced"]) : pick(["invoiced", "not invoiced", "not invoiced"]);
   const payCrew = age > 21 || (age > 7 && chance(0.6));
+  // Fatture from the team: everyone paid sent one first; on unpaid jobs about half are in.
+  j.fatture = {};
+  for (const p of j.crew) if (payCrew || chance(0.5)) j.fatture[p.id] = day(Math.min(-1, j.to + int(1, 4)));
   if (payCrew) for (const p of j.crew) {
     const recs = receipts.filter((r) => r.data.personId === p.id && r.data.jobId === j.id), recAmt = round2(recs.reduce((a, r) => a + r.data.amount, 0));
     const paidOn = day(Math.min(-1, j.to + int(3, 9)));
@@ -130,7 +133,7 @@ await push(admin, people.map(({ id, ...p }) => ({ c: "people", id, data: { ...p,
 await push(admin, jobs.map((j) => ({ c: "jobs", id: j.id, data: {
   client: j.client, title: j.title, date: day(j.from), endDate: j.to > j.from ? day(j.to) : "", call: j.call, location: j.location, notes: "",
   people: j.crew.map((p) => p.id), billing: j.billing, fee: j.billing === "flat" ? j.amount : 0, clientRate: j.billing === "hourly" ? j.amount : 0,
-  invoiceStatus: j.inv, clientPaidAt: j.inv === "paid" ? day(Math.min(-1, j.to + 14)) : "", ...(j.archived ? { archived: true, archivedAt: day(Math.min(-1, j.to + 20)) } : {}),
+  crewInvoice: j.fatture || {}, invoiceStatus: j.inv, clientPaidAt: j.inv === "paid" ? day(Math.min(-1, j.to + 14)) : "", ...(j.archived ? { archived: true, archivedAt: day(Math.min(-1, j.to + 20)) } : {}),
 } })));
 await push(admin, shifts);
 await push(admin, receipts);

@@ -302,7 +302,7 @@ function forceShiftTerms(prev, data) {
 // ---------- Sync ----------
 // Jobs (bookings) are admin-only to write: applyChange's staff branch denies any
 // collection it doesn't list. Staff can read jobs, but not the client billing on them.
-const JOB_MONEY_FIELDS = ["billing", "fee", "clientRate", "invoiceStatus", "clientPaidAt", "crewPaid", "archived", "archivedAt"];
+const JOB_MONEY_FIELDS = ["billing", "fee", "clientRate", "invoiceStatus", "clientPaidAt", "crewPaid", "crewInvoice", "archived", "archivedAt"];
 // Staff see only their own money. A login linked to a person on the board gets that
 // person's rates, hours, receipts and payments, plus any hours or receipts the login
 // entered itself. Everyone else on the board comes through as name, role and location,
@@ -461,9 +461,11 @@ function auditChange(user, c, id, prev, data) {
     if (add || del) return;
     info = { title: str([cur.title, cur.client].filter(Boolean).join(" · "), 120) };
     const paidNow = Object.keys(data.crewPaid || {}).find((k) => !(prev.crewPaid || {})[k]);
+    let fatNow;
     if (!!prev.archived !== !!data.archived) verb = data.archived ? "job.archive" : "job.unarchive";
     else if (prev.invoiceStatus !== data.invoiceStatus && data.invoiceStatus === "paid") verb = "job.clientpaid";
     else if (paidNow) { verb = "job.crewpaid"; personId = paidNow; }
+    else if ((fatNow = Object.keys(data.crewInvoice || {}).find((k) => !(prev.crewInvoice || {})[k]))) { verb = "job.fattura"; personId = fatNow; }
     else return;
   } else if (c === "requests") {
     if (add || del || prev.status === data.status) return;
@@ -776,7 +778,9 @@ async function route(req, res) {
     if (q.userCount.get().n === 0) return fail(res, 409, "Questo sito non è ancora stato configurato.");
     if (signupThrottled(ip)) return fail(res, 429, "Troppe iscrizioni da questa connessione. Riprova più tardi.");
     const b = await readJson(req, 10_000);
-    const kind = b.kind === "client" ? "client" : "staff";
+    // Only the team signs up; customer accounts are made by the office (Impostazioni → Accessi).
+    if (b.kind === "client") return fail(res, 403, "I clienti non si registrano: l'ufficio crea il loro accesso.");
+    const kind = "staff";
     const username = str(b.username, 40).trim(), name = str(b.name, 80).trim();
     const company = kind === "client" ? str(b.company, 80).trim() : "", phone = str(b.phone, 40).trim();
     if (!name) return fail(res, 400, "Inserisci nome e cognome.");

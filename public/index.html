@@ -45,13 +45,8 @@
     </form>
     <form id="signup-form" novalidate hidden>
       <h1>Registrati</h1>
-      <div class="seg" role="group" aria-label="Chi sei" id="sg-kind">
-        <button type="button" data-kind="staff" aria-pressed="true">Lavoro con l'agenzia</button>
-        <button type="button" data-kind="client" aria-pressed="false">Sono un cliente</button>
-      </div>
-      <p id="sg-sub"></p>
+      <p id="sg-sub">Per modelli/e e tecnici. L'ufficio approva l'iscrizione prima che tu possa entrare.</p>
       <div class="field"><label for="sg-name">Nome e cognome</label><input id="sg-name" autocomplete="name" maxlength="80" required></div>
-      <div class="field" id="sg-company-wrap" hidden><label for="sg-company">Azienda</label><input id="sg-company" autocomplete="organization" maxlength="80"></div>
       <div class="field" id="sg-wants-wrap"><label for="sg-wants">Lavoro come</label><select id="sg-wants"><option value="model">Modello/a</option><option value="technician">Tecnico</option></select></div>
       <div class="field"><label for="sg-phone">Telefono</label><input id="sg-phone" type="tel" autocomplete="tel" maxlength="40"></div>
       <div class="field"><label for="sg-user">Nome utente</label><input id="sg-user" autocomplete="username" autocapitalize="none" spellcheck="false" required><span class="hint">Va bene anche la tua email.</span></div>
